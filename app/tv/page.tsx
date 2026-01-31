@@ -85,7 +85,7 @@ export default function TVDashboard() {
       {/* Two-column layout for leaderboards */}
       <div className="grid grid-cols-2 gap-8 mb-8">
         {/* DB Leaderboard */}
-        <div className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-emerald-500/20">
+        <div className="bg-emerald-900/40 backdrop-blur-sm rounded-2xl p-6 border border-emerald-400/40">
           <h2 className="text-2xl font-bold mb-4 text-emerald-300">💰 DB Leaderboard - Januar 2026</h2>
           <div className="space-y-3">
             {data.leaderboard.map((person, index) => (
@@ -114,7 +114,7 @@ export default function TVDashboard() {
         </div>
 
         {/* Meetings Leaderboard */}
-        <div className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-blue-500/20">
+        <div className="bg-blue-900/40 backdrop-blur-sm rounded-2xl p-6 border border-blue-400/40">
           <h2 className="text-2xl font-bold mb-4 text-blue-300">📅 Møde Leaderboard - Januar 2026</h2>
           <div className="space-y-3">
             {meetingsLeaderboard.map((person, index) => (
