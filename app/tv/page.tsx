@@ -98,7 +98,7 @@ export default function TVDashboard() {
   const currentMonth = getCurrentMonthName();
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-4 md:p-8">
       {/* Subtle background glow effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl" />
@@ -107,42 +107,42 @@ export default function TVDashboard() {
       </div>
       
       <div className="relative z-10">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-5xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
-          <div className="text-right">
-            <Link href="/input" className="px-6 py-3 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 transition-all duration-300 inline-block mb-2 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <h1 className="text-3xl md:text-5xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
+          <div className="text-left md:text-right flex flex-row md:flex-col items-center md:items-end gap-3 md:gap-0">
+            <Link href="/input" className="px-4 md:px-6 py-2 md:py-3 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 transition-all duration-300 inline-block md:mb-2 shadow-[0_0_20px_rgba(255,255,255,0.05)] text-sm md:text-base">
               ➕ Tilføj Salg
             </Link>
-            <div className="text-sm text-white/40">Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}</div>
+            <div className="text-xs md:text-sm text-white/40">Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}</div>
           </div>
         </div>
         
-        {/* Two-column layout for leaderboards */}
-        <div className="grid grid-cols-2 gap-8 mb-8">
+        {/* Responsive layout: 1 column on mobile, 2 columns on tablet+ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-6 md:mb-8">
           {/* DB Leaderboard */}
-          <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-3xl p-6 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)]">
-            <h2 className="text-2xl font-semibold mb-5 text-teal-200/90 tracking-wide">💰 DB Leaderboard - {currentMonth}</h2>
+          <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)]">
+            <h2 className="text-lg md:text-2xl font-semibold mb-3 md:mb-5 text-teal-200/90 tracking-wide">💰 DB Leaderboard - {currentMonth}</h2>
             <div className="space-y-3">
               {data.leaderboard.map((person, index) => {
                 const isOverGoal = person.db >= DB_GOAL;
                 const missingAmount = DB_GOAL - person.db;
                 
                 return (
-                  <div key={person.name} className={`p-4 rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
+                  <div key={person.name} className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="text-3xl font-bold w-12 text-center opacity-90">{getMedal(index)}</div>
+                      <div className="flex items-center gap-2 md:gap-4 flex-1">
+                        <div className="text-xl md:text-3xl font-bold w-8 md:w-12 text-center opacity-90">{getMedal(index)}</div>
                         <div>
-                          <div className="text-xl font-semibold text-white/95">{person.name}</div>
-                          <div className="text-xs text-white/40 font-medium">{person.goalProgress.toFixed(1)}% af mål</div>
+                          <div className="text-base md:text-xl font-semibold text-white/95">{person.name}</div>
+                          <div className="text-[10px] md:text-xs text-white/40 font-medium">{person.goalProgress.toFixed(1)}% af mål</div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className={`text-2xl font-bold ${isOverGoal ? 'text-emerald-400' : 'text-white/95'}`}>
+                        <div className={`text-lg md:text-2xl font-bold ${isOverGoal ? 'text-emerald-400' : 'text-white/95'}`}>
                           {person.db.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr
                         </div>
                         {!isOverGoal && (
-                          <div className="text-xs text-white/30 font-medium">
+                          <div className="text-[10px] md:text-xs text-white/30 font-medium">
                             mangler {missingAmount.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr
                           </div>
                         )}
@@ -165,27 +165,27 @@ export default function TVDashboard() {
           </div>
 
           {/* Meetings Leaderboard */}
-          <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-3xl p-6 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)]">
-            <h2 className="text-2xl font-semibold mb-5 text-indigo-200/90 tracking-wide">📅 Møde Leaderboard - {currentMonth}</h2>
+          <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)]">
+            <h2 className="text-lg md:text-2xl font-semibold mb-3 md:mb-5 text-indigo-200/90 tracking-wide">📅 Møde Leaderboard - {currentMonth}</h2>
             <div className="space-y-3">
               {meetingsLeaderboard.map((person, index) => {
                 const isOverGoal = person.meetings >= MEETINGS_GOAL;
                 
                 return (
-                  <div key={person.name} className={`p-4 rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
+                  <div key={person.name} className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="text-3xl font-bold w-12 text-center opacity-90">{getMedal(index)}</div>
+                      <div className="flex items-center gap-2 md:gap-4 flex-1">
+                        <div className="text-xl md:text-3xl font-bold w-8 md:w-12 text-center opacity-90">{getMedal(index)}</div>
                         <div>
-                          <div className="text-xl font-semibold text-white/95">{person.name}</div>
-                          <div className="text-xs text-white/40 font-medium">
+                          <div className="text-base md:text-xl font-semibold text-white/95">{person.name}</div>
+                          <div className="text-[10px] md:text-xs text-white/40 font-medium">
                             <span className={isOverGoal ? 'text-emerald-400' : 'text-white/40'}>{person.meetings}</span>
                             <span className="text-white/40">/{MEETINGS_GOAL} møder</span>
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className={`text-2xl font-bold ${isOverGoal ? 'text-emerald-400' : 'text-white/95'}`}>
+                        <div className={`text-lg md:text-2xl font-bold ${isOverGoal ? 'text-emerald-400' : 'text-white/95'}`}>
                           {person.meetings} {person.meetings === 1 ? 'møde' : 'møder'}
                         </div>
                       </div>
@@ -209,9 +209,9 @@ export default function TVDashboard() {
         
         {/* Hall of Fame Section */}
         {hallOfFame.length > 0 && (
-          <div className="mb-8">
-            <div className="backdrop-blur-xl bg-amber-500/[0.04] rounded-3xl p-6 border border-amber-400/20 shadow-[0_0_40px_rgba(251,191,36,0.06)]">
-              <h2 className="text-2xl font-semibold mb-5 text-amber-200/90 tracking-wide">🏅 Hall of Fame</h2>
+          <div className="mb-6 md:mb-8">
+            <div className="backdrop-blur-xl bg-amber-500/[0.04] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-amber-400/20 shadow-[0_0_40px_rgba(251,191,36,0.06)]">
+              <h2 className="text-lg md:text-2xl font-semibold mb-3 md:mb-5 text-amber-200/90 tracking-wide">🏅 Hall of Fame</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {hallOfFame.slice(0, 6).map((entry) => (
                   <div key={entry.monthKey} className="backdrop-blur-xl bg-white/[0.03] rounded-2xl p-4 border border-amber-300/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -249,23 +249,23 @@ export default function TVDashboard() {
         )}
         
         {/* Summary stats with premium glass effect */}
-        <div className="grid grid-cols-3 gap-6">
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-2xl p-6 text-center border border-teal-400/15 shadow-[0_0_30px_rgba(20,184,166,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <div className="text-white/40 text-sm mb-2 font-medium tracking-wide">Total DB</div>
-            <div className="text-4xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">{data.totalDb.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr</div>
+        <div className="grid grid-cols-3 gap-2 md:gap-6">
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-teal-400/15 shadow-[0_0_30px_rgba(20,184,166,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total DB</div>
+            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">{data.totalDb.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr</div>
           </div>
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-2xl p-6 text-center border border-indigo-400/15 shadow-[0_0_30px_rgba(99,102,241,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <div className="text-white/40 text-sm mb-2 font-medium tracking-wide">Total Møder</div>
-            <div className="text-4xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">{data.totalMeetings}</div>
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-indigo-400/15 shadow-[0_0_30px_rgba(99,102,241,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total Møder</div>
+            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">{data.totalMeetings}</div>
           </div>
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-2xl p-6 text-center border border-amber-400/15 shadow-[0_0_30px_rgba(251,191,36,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <div className="text-white/40 text-sm mb-2 font-medium tracking-wide">Total Retention</div>
-            <div className="text-4xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">{data.totalRetention.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr</div>
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-amber-400/15 shadow-[0_0_30px_rgba(251,191,36,0.08),inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Retention</div>
+            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">{data.totalRetention.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr</div>
           </div>
         </div>
         
-        <div className="fixed bottom-4 right-4 backdrop-blur-xl bg-white/[0.03] px-4 py-2 rounded-xl text-sm text-white/30 border border-white/[0.08]">
-          🔄 Auto-opdatering hver 30 sek
+        <div className="fixed bottom-2 right-2 md:bottom-4 md:right-4 backdrop-blur-xl bg-white/[0.03] px-2 md:px-4 py-1 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-sm text-white/30 border border-white/[0.08]">
+          🔄 Auto-opdatering
         </div>
       </div>
     </div>
