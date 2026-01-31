@@ -15,6 +15,15 @@ interface BudgetInfo {
   requiredDailyToHitGoal: number;
 }
 
+interface MeetingsBudgetInfo {
+  meetingsGoal: number;
+  expectedMeetings: number;
+  actualMeetings: number;
+  difference: number;
+  isUnderBudget: boolean;
+  requiredMeetingsRemaining: number;
+}
+
 interface SalespersonData {
   name: string;
   db: number;
@@ -24,6 +33,7 @@ interface SalespersonData {
   salesCount?: number; // For "on fire" detection
   monthlyGoal?: number;
   budgetInfo?: BudgetInfo;
+  meetingsBudgetInfo?: MeetingsBudgetInfo;
 }
 
 interface DashboardData {
@@ -728,13 +738,18 @@ export default function TVDashboard() {
               {meetingsLeaderboard.map((person, index) => {
                 const isOverGoal = person.meetings >= MEETINGS_GOAL;
                 const meetingProgress = (person.meetings / MEETINGS_GOAL) * 100;
+                // Check if behind on meetings budget based on workdays
+                const isUnderMeetingsBudget = person.meetingsBudgetInfo?.isUnderBudget ?? false;
                 
                 return (
                   <AnimatedCard 
                     key={person.name} 
                     index={index}
-                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl ${getCardStyle(index)}`}
+                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl relative overflow-visible ${getCardStyle(index)}`}
                   >
+                    {/* Punching man for those behind on meetings budget (not top 3) */}
+                    <PunchingMan show={isUnderMeetingsBudget && index > 2} personName={`meetings-${person.name}`} />
+                    
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 md:gap-4 flex-1">
                         <div className={`text-xl md:text-3xl font-bold w-8 md:w-12 text-center ${index === 0 ? 'animate-bounce-subtle' : ''}`}>

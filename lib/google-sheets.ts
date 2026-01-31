@@ -867,6 +867,45 @@ export async function updateSalesGoal(name: string, goal: number): Promise<void>
   }
 }
 
+// Meetings budget calculation
+const MEETINGS_GOAL_PER_MONTH = 6;
+
+export function getMeetingsBudgetInfo(currentMeetings: number): {
+  meetingsGoal: number;
+  expectedMeetings: number;
+  actualMeetings: number;
+  difference: number;
+  isUnderBudget: boolean;
+  requiredMeetingsRemaining: number;
+} {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
+  
+  const workdaysInMonth = getWorkdaysInMonth(year, month);
+  const workdaysElapsed = getWorkdaysElapsed(year, month, day);
+  const workdaysRemaining = workdaysInMonth - workdaysElapsed;
+  
+  // Calculate expected meetings based on workdays elapsed
+  const meetingsPerWorkday = MEETINGS_GOAL_PER_MONTH / workdaysInMonth;
+  const expectedMeetings = meetingsPerWorkday * workdaysElapsed;
+  const difference = currentMeetings - expectedMeetings;
+  const isUnderBudget = difference < 0;
+  
+  // Calculate remaining meetings needed
+  const remainingMeetings = MEETINGS_GOAL_PER_MONTH - currentMeetings;
+  
+  return {
+    meetingsGoal: MEETINGS_GOAL_PER_MONTH,
+    expectedMeetings: Math.round(expectedMeetings * 10) / 10,
+    actualMeetings: currentMeetings,
+    difference: Math.round(difference * 10) / 10,
+    isUnderBudget,
+    requiredMeetingsRemaining: Math.max(0, remainingMeetings),
+  };
+}
+
 // Get all goals with budget info for each salesperson
 export async function fetchDashboardDataWithBudget(timePeriod: 'daily' | 'monthly' | 'yearly' = 'monthly') {
   // Fetch regular dashboard data
@@ -875,16 +914,18 @@ export async function fetchDashboardDataWithBudget(timePeriod: 'daily' | 'monthl
   // Fetch individual goals
   const goals = await fetchSalesGoals();
   
-  // Add budget info to each person
+  // Add budget info to each person (both DB and meetings)
   const leaderboardWithBudget = dashboardData.leaderboard.map(person => {
     const monthlyGoal = goals[person.name] || DEFAULT_GOALS[person.name] || 100000;
     const budgetInfo = getWorkdayBudgetInfo(person.db, monthlyGoal);
+    const meetingsBudgetInfo = getMeetingsBudgetInfo(person.meetings);
     
     return {
       ...person,
       monthlyGoal,
       goalProgress: (person.db / monthlyGoal) * 100,
       budgetInfo,
+      meetingsBudgetInfo,
     };
   });
   
