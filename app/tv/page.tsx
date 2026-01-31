@@ -624,16 +624,16 @@ export default function TVDashboard() {
         }
         .animate-fire { animation: fire-flicker 0.5s ease-in-out infinite; }
         
-        /* Punch Animation - goes far enough to hit the name */
+        /* Punch Animation - face emoji goes just past the name */
         @keyframes punch {
           0% { transform: translateX(0) rotate(0deg); }
-          15% { transform: translateX(20px) rotate(-15deg); }
-          30% { transform: translateX(50px) rotate(5deg) scale(1.1); }
-          45% { transform: translateX(80px) rotate(-5deg) scale(1.2); }
-          50% { transform: translateX(100px) rotate(0deg) scale(1.3); }
-          55% { transform: translateX(80px) rotate(5deg) scale(1.2); }
-          70% { transform: translateX(50px) rotate(-5deg) scale(1.1); }
-          85% { transform: translateX(20px) rotate(10deg); }
+          15% { transform: translateX(30px) rotate(-15deg); }
+          30% { transform: translateX(80px) rotate(5deg) scale(1.1); }
+          45% { transform: translateX(130px) rotate(-5deg) scale(1.2); }
+          50% { transform: translateX(160px) rotate(0deg) scale(1.3); }
+          55% { transform: translateX(130px) rotate(5deg) scale(1.2); }
+          70% { transform: translateX(80px) rotate(-5deg) scale(1.1); }
+          85% { transform: translateX(30px) rotate(10deg); }
           100% { transform: translateX(0) rotate(0deg); }
         }
         .animate-punch { animation: punch 0.8s ease-in-out infinite; }
