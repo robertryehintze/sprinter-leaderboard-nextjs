@@ -243,7 +243,29 @@ export default function TVDashboard() {
           </div>
         </div>
         
-        {/* Leaderboards Grid */}
+        {/* Summary Stats - Above Leaderboards */}
+        <div className="grid grid-cols-3 gap-2 md:gap-6 mb-6 md:mb-8 animate-fade-in">
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-teal-400/15 shadow-[0_0_30px_rgba(20,184,166,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
+            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total DB</div>
+            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">
+              <AnimatedNumber value={data.totalDb} suffix=" kr" />
+            </div>
+          </div>
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-indigo-400/15 shadow-[0_0_30px_rgba(99,102,241,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
+            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total Møder</div>
+            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
+              <AnimatedNumber value={data.totalMeetings} />
+            </div>
+          </div>
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-amber-400/15 shadow-[0_0_30px_rgba(251,191,36,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
+            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Retention</div>
+            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">
+              <AnimatedNumber value={data.totalRetention} suffix=" kr" />
+            </div>
+          </div>
+        </div>
+        
+        {/* Leaderboards Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-6 md:mb-8">
           {/* DB Leaderboard */}
           <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)] animate-slide-up">
@@ -382,27 +404,7 @@ export default function TVDashboard() {
           </div>
         )}
         
-        {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-2 md:gap-6 animate-slide-up-more-delayed">
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-teal-400/15 shadow-[0_0_30px_rgba(20,184,166,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
-            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total DB</div>
-            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">
-              <AnimatedNumber value={data.totalDb} suffix=" kr" />
-            </div>
-          </div>
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-indigo-400/15 shadow-[0_0_30px_rgba(99,102,241,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
-            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total Møder</div>
-            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
-              <AnimatedNumber value={data.totalMeetings} />
-            </div>
-          </div>
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-amber-400/15 shadow-[0_0_30px_rgba(251,191,36,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
-            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Retention</div>
-            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">
-              <AnimatedNumber value={data.totalRetention} suffix=" kr" />
-            </div>
-          </div>
-        </div>
+
         
         <div className="fixed bottom-2 right-2 md:bottom-4 md:right-4 backdrop-blur-xl bg-white/[0.03] px-2 md:px-4 py-1 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-sm text-white/30 border border-white/[0.08]">
           🔄 Auto-opdatering
