@@ -17,6 +17,7 @@ export default function InputPage() {
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [customerName, setCustomerName] = useState('');
+  const [manualCustomerName, setManualCustomerName] = useState(''); // For meeting bookings
   
   // Meeting matching state
   const [meetingMatches, setMeetingMatches] = useState<MeetingMatch[]>([]);
@@ -32,6 +33,9 @@ export default function InputPage() {
   const [retentionSalg, setRetentionSalg] = useState<'JA' | 'NEJ'>('NEJ');
   
   const salespeople = ['Niels', 'Robert', 'Søgaard', 'Frank', 'Jeppe', 'Kristofer'];
+  
+  // Determine if this is a meeting-only entry (no order)
+  const isMeetingOnly = soerenMoede === 'JA' && !ordreId.trim();
   
   useEffect(() => {
     if (success) {
@@ -98,25 +102,38 @@ export default function InputPage() {
     e.preventDefault();
     if (!saelger) { alert('Vælg sælger'); return; }
     
-    const isMeeting = soerenMoede === 'JA' && !ordreId.trim();
-    if (!isMeeting && !ordreId.trim()) { alert('Indtast Ordre ID eller vælg Søren Møde = JA'); return; }
-    if (!db.trim()) { alert('Indtast DB beløb'); return; }
-    
-    const dbNum = parseFloat(db);
-    if (isNaN(dbNum) || dbNum < 0) { alert('DB skal være et gyldigt tal'); return; }
+    // For meeting-only entries, require customer name
+    if (isMeetingOnly) {
+      if (!manualCustomerName.trim()) { 
+        alert('Indtast kundenavn for mødet'); 
+        return; 
+      }
+    } else {
+      if (!ordreId.trim()) { alert('Indtast Ordre ID'); return; }
+      if (!db.trim()) { alert('Indtast DB beløb'); return; }
+      
+      const dbNum = parseFloat(db);
+      if (isNaN(dbNum) || dbNum < 0) { alert('DB skal være et gyldigt tal'); return; }
+    }
     
     setLoading(true);
     try {
-      // Submit the sale
+      // Determine which customer name to use
+      const finalCustomerName = isMeetingOnly ? manualCustomerName.trim() : customerName;
+      const finalDb = isMeetingOnly ? 0 : parseFloat(db);
+      
+      // Submit the sale/meeting
       const res = await fetch('/api/sheets/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          dato, saelger,
-          ordreId: isMeeting ? 'MØDE' : ordreId.trim(),
-          kunde: customerName,
-          db: isMeeting ? 0 : dbNum,
-          soerenMoede, retentionSalg
+          dato, 
+          saelger,
+          ordreId: isMeetingOnly ? 'MØDE' : ordreId.trim(),
+          kunde: finalCustomerName,
+          db: finalDb,
+          soerenMoede, 
+          retentionSalg
         }),
       });
       const data = await res.json();
@@ -140,8 +157,8 @@ export default function InputPage() {
         
         setSuccess(true);
         setOrdreId(''); setDb(''); setSoerenMoede('NEJ'); setRetentionSalg('NEJ'); 
-        setLookupMsg(null); setCustomerName(''); setMeetingMatches([]); 
-        setSelectedMeeting(null); setShowMeetingPrompt(false);
+        setLookupMsg(null); setCustomerName(''); setManualCustomerName('');
+        setMeetingMatches([]); setSelectedMeeting(null); setShowMeetingPrompt(false);
       } else { 
         alert('Fejl: ' + (data.message || 'Ukendt')); 
       }
@@ -159,15 +176,48 @@ export default function InputPage() {
     <div className="min-h-screen bg-white">
       <div className="bg-primary text-white p-4 shadow-md">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Salg Input</h1>
+          <h1 className="text-2xl font-bold">{isMeetingOnly ? '📅 Book Møde' : '💰 Salg Input'}</h1>
           <Link href="/tv" className="px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30">📺 TV Dashboard</Link>
         </div>
       </div>
       
-      {success && <div className="bg-green-500 text-white p-4 text-center font-semibold">✅ Salg registreret!</div>}
+      {success && (
+        <div className="bg-green-500 text-white p-4 text-center font-semibold">
+          ✅ {isMeetingOnly ? 'Møde registreret!' : 'Salg registreret!'}
+        </div>
+      )}
       
       <div className="max-w-2xl mx-auto p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Søren Møde - Moved to top for better UX */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type *</label>
+            <div className="flex gap-4">
+              <button 
+                type="button" 
+                onClick={() => setSoerenMoede('NEJ')}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                  soerenMoede === 'NEJ' 
+                    ? 'bg-blue-500 text-white shadow-md' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+              >
+                💰 Salg
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setSoerenMoede('JA')}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                  soerenMoede === 'JA' 
+                    ? 'bg-green-500 text-white shadow-md' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+              >
+                📅 Søren Møde
+              </button>
+            </div>
+          </div>
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Sælger *</label>
             <select value={saelger} onChange={(e) => setSaelger(e.target.value)} required
@@ -183,16 +233,39 @@ export default function InputPage() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary" />
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Ordre ID {soerenMoede === 'JA' ? '(valgfrit)' : '*'}</label>
-            <input type="text" value={ordreId} onChange={(e) => setOrdreId(e.target.value)} placeholder="Ordre nummer..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary" required={soerenMoede === 'NEJ'} />
-            {lookingUp && <p className="mt-2 text-sm text-gray-500">🔍 Søger i Webmerc...</p>}
-            {lookupMsg && <p className="mt-2 text-sm">{lookupMsg}</p>}
-          </div>
+          {/* Meeting-specific: Customer name field */}
+          {soerenMoede === 'JA' && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <label className="block text-sm font-medium text-green-800 mb-2">
+                👤 Møde med hvem? *
+              </label>
+              <input 
+                type="text" 
+                value={manualCustomerName} 
+                onChange={(e) => setManualCustomerName(e.target.value)} 
+                placeholder="Indtast kundens navn/firma..."
+                className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white"
+                required={isMeetingOnly}
+              />
+              <p className="mt-2 text-xs text-green-600">
+                💡 Kundenavnet bruges til at koble mødet med et fremtidigt salg
+              </p>
+            </div>
+          )}
           
-          {/* Meeting Match Prompt */}
-          {showMeetingPrompt && meetingMatches.length > 0 && (
+          {/* Order ID - only shown for sales */}
+          {soerenMoede === 'NEJ' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Ordre ID *</label>
+              <input type="text" value={ordreId} onChange={(e) => setOrdreId(e.target.value)} placeholder="Ordre nummer..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary" required />
+              {lookingUp && <p className="mt-2 text-sm text-gray-500">🔍 Søger i Webmerc...</p>}
+              {lookupMsg && <p className="mt-2 text-sm">{lookupMsg}</p>}
+            </div>
+          )}
+          
+          {/* Meeting Match Prompt - only for sales */}
+          {showMeetingPrompt && meetingMatches.length > 0 && soerenMoede === 'NEJ' && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <span className="text-2xl">📅</span>
@@ -256,47 +329,43 @@ export default function InputPage() {
             <p className="text-sm text-gray-500">🔍 Tjekker for matchende møder...</p>
           )}
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">DB (Fortjeneste) *</label>
-            <input type="number" value={db} onChange={(e) => setDb(e.target.value)} placeholder="0" step="0.01" min="0" required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary" />
-            <p className="mt-1 text-xs text-gray-500">Auto-udfyldes fra Webmerc</p>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Søren Møde *</label>
-            <div className="flex gap-4">
-              {(['JA', 'NEJ'] as const).map(v => (
-                <button key={v} type="button" onClick={() => setSoerenMoede(v)}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium ${soerenMoede === v ? (v === 'JA' ? 'bg-green-500 text-white' : 'bg-gray-500 text-white') : 'bg-gray-100 hover:bg-gray-200'}`}>
-                  {v}
-                </button>
-              ))}
+          {/* DB - only shown for sales */}
+          {soerenMoede === 'NEJ' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">DB (Fortjeneste) *</label>
+              <input type="number" value={db} onChange={(e) => setDb(e.target.value)} placeholder="0" step="0.01" min="0" required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary" />
+              <p className="mt-1 text-xs text-gray-500">Auto-udfyldes fra Webmerc</p>
             </div>
-          </div>
+          )}
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Retention Salg *</label>
-            <div className="flex gap-4">
-              {(['JA', 'NEJ'] as const).map(v => (
-                <button key={v} type="button" onClick={() => setRetentionSalg(v)}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium ${retentionSalg === v ? (v === 'JA' ? 'bg-green-500 text-white' : 'bg-gray-500 text-white') : 'bg-gray-100 hover:bg-gray-200'}`}>
-                  {v}
-                </button>
-              ))}
+          {/* Retention - only shown for sales */}
+          {soerenMoede === 'NEJ' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Retention Salg *</label>
+              <div className="flex gap-4">
+                {(['JA', 'NEJ'] as const).map(v => (
+                  <button key={v} type="button" onClick={() => setRetentionSalg(v)}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium ${retentionSalg === v ? (v === 'JA' ? 'bg-green-500 text-white' : 'bg-gray-500 text-white') : 'bg-gray-100 hover:bg-gray-200'}`}>
+                    {v}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           
           <div className="flex gap-4 pt-4">
             <button type="button" onClick={() => { 
               setOrdreId(''); setDb(''); setSoerenMoede('NEJ'); setRetentionSalg('NEJ'); 
-              setLookupMsg(null); setCustomerName(''); setMeetingMatches([]);
-              setSelectedMeeting(null); setShowMeetingPrompt(false);
+              setLookupMsg(null); setCustomerName(''); setManualCustomerName('');
+              setMeetingMatches([]); setSelectedMeeting(null); setShowMeetingPrompt(false);
             }}
               className="flex-1 px-6 py-4 bg-gray-100 rounded-lg font-semibold hover:bg-gray-200">Ryd</button>
             <button type="submit" disabled={loading}
-              className="flex-1 px-6 py-4 bg-primary text-white rounded-lg font-semibold hover:opacity-90 disabled:opacity-50">
-              {loading ? 'Sender...' : 'Send Salg'}
+              className={`flex-1 px-6 py-4 text-white rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 ${
+                isMeetingOnly ? 'bg-green-500' : 'bg-primary'
+              }`}>
+              {loading ? 'Sender...' : (isMeetingOnly ? '📅 Book Møde' : '💰 Send Salg')}
             </button>
           </div>
         </form>
