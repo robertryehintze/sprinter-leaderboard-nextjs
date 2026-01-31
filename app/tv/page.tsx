@@ -76,10 +76,10 @@ export default function TVDashboard() {
           <div className="space-y-3">
             {data.leaderboard.map((person, index) => (
               <div key={person.name} className={`p-4 rounded-xl ${
-                index === 0 ? 'bg-yellow-900/30 border-2 border-yellow-500' :
-                index === 1 ? 'bg-gray-600/30 border-2 border-gray-400' :
-                index === 2 ? 'bg-orange-900/30 border-2 border-orange-600' :
-                'bg-gray-700/50 border border-gray-600'
+                index === 0 ? 'border-2 border-yellow-500' :
+                index === 1 ? 'border-2 border-gray-400' :
+                index === 2 ? 'border-2 border-orange-600' :
+                'border border-gray-600'
               }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
@@ -110,10 +110,10 @@ export default function TVDashboard() {
           <div className="space-y-3">
             {meetingsLeaderboard.map((person, index) => (
               <div key={person.name} className={`p-4 rounded-xl ${
-                index === 0 ? 'bg-yellow-900/30 border-2 border-yellow-500' :
-                index === 1 ? 'bg-gray-600/30 border-2 border-gray-400' :
-                index === 2 ? 'bg-orange-900/30 border-2 border-orange-600' :
-                'bg-gray-700/50 border border-gray-600'
+                index === 0 ? 'border-2 border-yellow-500' :
+                index === 1 ? 'border-2 border-gray-400' :
+                index === 2 ? 'border-2 border-orange-600' :
+                'border border-gray-600'
               }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
