@@ -103,8 +103,8 @@ export default function TVDashboard() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <div className="h-3 bg-gray-700/50 rounded-full overflow-hidden">
-                    <div className={`h-full ${person.goalProgress >= 100 ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]' : person.goalProgress >= 75 ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]'}`}
+                  <div className="h-3 bg-emerald-950/60 rounded-full overflow-hidden">
+                    <div className={`h-full ${person.goalProgress >= 100 ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : person.goalProgress >= 75 ? 'bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]'}`}
                       style={{ width: `${Math.min(person.goalProgress, 100)}%` }} />
                   </div>
                 </div>
@@ -132,8 +132,8 @@ export default function TVDashboard() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <div className="h-3 bg-gray-700/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.6)]"
+                  <div className="h-3 bg-blue-950/60 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]"
                       style={{ width: `${(person.meetings / maxMeetings) * 100}%` }} />
                   </div>
                 </div>
