@@ -58,49 +58,19 @@ const FireIcon = ({ animate }: { animate: boolean }) => (
 );
 
 // Punching Man Component - appears when someone is under budget
+// Shows continuously with punching animation for underperformers
 const PunchingMan = ({ show }: { show: boolean }) => {
-  const [phase, setPhase] = useState<'hidden' | 'sliding-in' | 'punching' | 'sliding-out'>('hidden');
+  if (!show) return null;
   
-  useEffect(() => {
-    if (show && phase === 'hidden') {
-      // Start slide in after delay
-      const timer1 = setTimeout(() => setPhase('sliding-in'), 500);
-      // Start punching after slide in completes (longer slide in)
-      const timer2 = setTimeout(() => setPhase('punching'), 1500);
-      // Stay punching much longer (8 seconds total punching time)
-      const timer3 = setTimeout(() => setPhase('sliding-out'), 9500);
-      // Hide completely after slide out
-      const timer4 = setTimeout(() => setPhase('hidden'), 10500);
-      
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        clearTimeout(timer3);
-        clearTimeout(timer4);
-      };
-    }
-  }, [show, phase]);
-  
-  if (phase === 'hidden') return null;
-  
-  const getPosition = () => {
-    switch (phase) {
-      case 'sliding-in': return 'translate-x-0';
-      case 'punching': return 'translate-x-0';
-      case 'sliding-out': return '-translate-x-full';
-      default: return '-translate-x-full';
-    }
-  };
-  
+  // Always show with punching animation when show is true
   return (
-    <div className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 transition-all duration-700 ease-out ${
-      getPosition()
-    } opacity-100`}
-    style={{ left: phase === 'sliding-in' || phase === 'punching' ? '120px' : '-50px' }}
+    <div 
+      className="absolute left-0 top-1/2 -translate-y-1/2 z-20 opacity-100"
+      style={{ left: '120px' }}
     >
       <div className="text-2xl md:text-3xl flex items-center">
-        <span className={phase === 'punching' ? 'animate-fist-pump' : ''}>👊</span>
-        <span className={phase === 'punching' ? 'animate-head-shake' : ''}>👴🏻</span>
+        <span className="animate-fist-pump">👊</span>
+        <span className="animate-head-shake">👴🏻</span>
       </div>
     </div>
   );
