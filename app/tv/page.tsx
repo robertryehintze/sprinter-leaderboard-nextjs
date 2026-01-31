@@ -258,15 +258,20 @@ export default function TVDashboard() {
       }
       
       // Check for goal achievements and trigger confetti
-      const anyoneReachedGoal = dashboardData.leaderboard.some(
-        (person: SalespersonData) => person.db >= DB_GOAL && 
-        (!data?.leaderboard.find(p => p.name === person.name) || 
-         data.leaderboard.find(p => p.name === person.name)!.db < DB_GOAL)
-      );
-      
-      if (anyoneReachedGoal) {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
+      // Only trigger if we have previous data (not on first load) and someone crossed the goal
+      if (data?.leaderboard) {
+        const anyoneReachedGoal = dashboardData.leaderboard.some(
+          (person: SalespersonData) => {
+            const previousPerson = data.leaderboard.find(p => p.name === person.name);
+            // Only trigger if they were below goal before and are now at/above goal
+            return person.db >= DB_GOAL && previousPerson && previousPerson.db < DB_GOAL;
+          }
+        );
+        
+        if (anyoneReachedGoal) {
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 5000);
+        }
       }
       
       setData(dashboardData);
