@@ -160,13 +160,21 @@ export async function fetchHallOfFame() {
     
     let rowDate: Date;
     if (typeof dateValue === 'number') {
+      // Skip invalid dates (0 or very low values result in dates before 1900)
+      if (dateValue < 36526) return; // 36526 = Jan 1, 2000 in Excel serial
       rowDate = new Date((dateValue - 25569) * 86400 * 1000);
     } else if (typeof dateValue === 'string') {
       const parts = dateValue.split('-');
       if (parts.length === 3) {
-        rowDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        const year = parseInt(parts[2]);
+        // Skip invalid years
+        if (year < 2000 || year > 2100) return;
+        rowDate = new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0]));
       } else return;
     } else return;
+    
+    // Skip dates before year 2000 (invalid data)
+    if (rowDate.getFullYear() < 2000) return;
     
     const monthKey = `${rowDate.getFullYear()}-${String(rowDate.getMonth() + 1).padStart(2, '0')}`;
     
