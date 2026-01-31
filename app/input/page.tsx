@@ -228,9 +228,16 @@ export default function InputPage() {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Dato *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {isMeetingOnly ? 'Booking-dato *' : 'Dato *'}
+            </label>
             <input type="date" value={dato} onChange={(e) => setDato(e.target.value)} required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary" />
+            {isMeetingOnly && (
+              <p className="mt-1 text-xs text-gray-500">
+                💡 Datoen mødet blev booket (ikke datoen mødet afholdes)
+              </p>
+            )}
           </div>
           
           {/* Meeting-specific: Customer name field */}
