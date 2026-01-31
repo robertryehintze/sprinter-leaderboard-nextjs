@@ -35,7 +35,7 @@ async function getAuthenticatedSheetsClient() {
   const formattedKey = formatPrivateKey(privateKey);
   
   const auth = new google.auth.JWT({
-    email: serviceAccountEmail,
+    email: serviceAccountEmail.trim(),
     key: formattedKey,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
