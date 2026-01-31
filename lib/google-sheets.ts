@@ -2,6 +2,42 @@ import { google } from 'googleapis';
 
 const SHEET_ID = '1jj-Q5pGdY94xLVOsGqgDELGpX8tuEzQm3mf9yJysnKw';
 
+function formatPrivateKey(key: string): string {
+  // Handle various formats of private key
+  let formattedKey = key;
+  
+  // If the key is JSON-escaped (has literal \n), convert to actual newlines
+  if (formattedKey.includes('\\n')) {
+    formattedKey = formattedKey.replace(/\\n/g, '\n');
+  }
+  
+  // If key doesn't have proper PEM format, try to fix it
+  if (!formattedKey.includes('-----BEGIN')) {
+    // Key might be base64 only, wrap it
+    formattedKey = `-----BEGIN PRIVATE KEY-----\n${formattedKey}\n-----END PRIVATE KEY-----\n`;
+  }
+  
+  // Ensure proper line breaks in the key body
+  // Remove any existing formatting first
+  const lines = formattedKey.split('\n');
+  const header = lines[0];
+  const footer = lines[lines.length - 1] || lines[lines.length - 2];
+  
+  // Get the key body (everything between header and footer)
+  let body = lines.slice(1, -1).join('').replace(/\s/g, '');
+  if (body.endsWith('-----ENDPRIVATEKEY-----')) {
+    body = body.replace('-----ENDPRIVATEKEY-----', '');
+  }
+  
+  // If body is too long (no line breaks), split into 64-char lines
+  if (body.length > 100 && !body.includes('\n')) {
+    const chunks = body.match(/.{1,64}/g) || [];
+    formattedKey = `-----BEGIN PRIVATE KEY-----\n${chunks.join('\n')}\n-----END PRIVATE KEY-----\n`;
+  }
+  
+  return formattedKey;
+}
+
 async function getAuthenticatedSheetsClient() {
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
@@ -10,9 +46,11 @@ async function getAuthenticatedSheetsClient() {
     throw new Error('Missing Google Service Account credentials');
   }
   
+  const formattedKey = formatPrivateKey(privateKey);
+  
   const auth = new google.auth.JWT({
     email: serviceAccountEmail,
-    key: privateKey.replace(/\\n/g, '\n'),
+    key: formattedKey,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   
