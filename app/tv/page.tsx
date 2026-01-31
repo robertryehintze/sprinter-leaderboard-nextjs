@@ -86,7 +86,7 @@ const PunchingMan = ({ show }: { show: boolean }) => {
       isVisible ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
     }`}>
       <div className={`text-2xl md:text-3xl ${isPunching ? 'animate-punch' : ''}`}>
-        👊😤
+        👊🧔🏻‍♂️
       </div>
     </div>
   );
