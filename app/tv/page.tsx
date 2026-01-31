@@ -3,6 +3,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 
+interface BudgetInfo {
+  workdaysInMonth: number;
+  workdaysElapsed: number;
+  workdaysRemaining: number;
+  dailyTarget: number;
+  expectedBudget: number;
+  actualDb: number;
+  difference: number;
+  isUnderBudget: boolean;
+  requiredDailyToHitGoal: number;
+}
+
 interface SalespersonData {
   name: string;
   db: number;
@@ -10,6 +22,8 @@ interface SalespersonData {
   retention: number;
   goalProgress: number;
   salesCount?: number; // For "on fire" detection
+  monthlyGoal?: number;
+  budgetInfo?: BudgetInfo;
 }
 
 interface DashboardData {
@@ -18,6 +32,7 @@ interface DashboardData {
   totalMeetings: number;
   totalRetention: number;
   recentSales?: { name: string; amount: number; time: string }[];
+  goals?: Record<string, number>;
 }
 
 interface HallOfFameEntry {
@@ -507,10 +522,15 @@ export default function TVDashboard() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4 animate-fade-in">
           <h1 className="text-3xl md:text-5xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
           <div className="text-left md:text-right flex flex-row md:flex-col items-center md:items-end gap-3 md:gap-0">
-            <Link href="/input" className="px-4 md:px-6 py-2 md:py-3 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 hover:scale-105 transition-all duration-300 inline-block md:mb-2 shadow-[0_0_20px_rgba(255,255,255,0.05)] text-sm md:text-base">
-              ➕ Tilføj Salg
-            </Link>
-            <div className="text-xs md:text-sm text-white/40">Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}</div>
+            <div className="flex gap-2">
+              <Link href="/input" className="px-4 md:px-6 py-2 md:py-3 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 hover:scale-105 transition-all duration-300 inline-block shadow-[0_0_20px_rgba(255,255,255,0.05)] text-sm md:text-base">
+                ➕ Tilføj Salg
+              </Link>
+              <Link href="/admin" className="px-4 md:px-6 py-2 md:py-3 bg-slate-500/10 backdrop-blur-xl border border-slate-400/20 text-slate-300 rounded-xl font-semibold hover:bg-slate-500/20 hover:scale-105 transition-all duration-300 inline-block shadow-[0_0_20px_rgba(100,116,139,0.05)] text-sm md:text-base">
+                ⚙️ Admin
+              </Link>
+            </div>
+            <div className="text-xs md:text-sm text-white/40 mt-2">Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}</div>
           </div>
         </div>
         
@@ -543,10 +563,12 @@ export default function TVDashboard() {
             <h2 className="text-lg md:text-2xl font-semibold mb-3 md:mb-5 text-teal-200/90 tracking-wide">💰 DB Leaderboard - {currentMonth}</h2>
             <div className="space-y-3" key={`db-${dataKey}`}>
               {data.leaderboard.map((person, index) => {
-                const isOverGoal = person.db >= DB_GOAL;
-                const missingAmount = DB_GOAL - person.db;
+                const monthlyGoal = person.monthlyGoal || DB_GOAL;
+                const isOverGoal = person.db >= monthlyGoal;
+                const missingAmount = monthlyGoal - person.db;
                 const onFire = isOnFire(person.name);
-                const isUnderBudget = person.goalProgress < 50; // Under 50% of goal
+                // Use workday budget calculation - show punching man if behind on daily budget
+                const isUnderWorkdayBudget = person.budgetInfo?.isUnderBudget ?? false;
                 
                 return (
                   <AnimatedCard 
@@ -554,8 +576,8 @@ export default function TVDashboard() {
                     index={index}
                     className={`p-3 md:p-4 rounded-xl md:rounded-2xl relative overflow-visible ${getCardStyle(index)}`}
                   >
-                    {/* Punching man for underperformers (not top 3) */}
-                    <PunchingMan show={isUnderBudget && index > 2} />
+                    {/* Punching man for those behind on workday budget (not top 3) */}
+                    <PunchingMan show={isUnderWorkdayBudget && index > 2} />
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 md:gap-4 flex-1">

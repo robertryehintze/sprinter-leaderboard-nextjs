@@ -674,3 +674,223 @@ export async function fetchRecentSales(limit: number = 10) {
     time: sale.time,
   }));
 }
+
+
+// ============================================
+// WORKDAY BUDGET CALCULATION & GOALS MANAGEMENT
+// ============================================
+
+// Default goals for each salesperson (can be overridden via admin)
+const DEFAULT_GOALS: Record<string, number> = {
+  'Niels': 100000,
+  'Robert': 100000,
+  'Søgaard': 100000,
+  'Frank': 100000,
+  'Jeppe': 100000,
+  'Kristofer': 100000,
+};
+
+// Calculate workdays (Monday-Friday) in a given month
+export function getWorkdaysInMonth(year: number, month: number): number {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  let workdays = 0;
+  
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    // Monday = 1, Friday = 5 (exclude Saturday = 6 and Sunday = 0)
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      workdays++;
+    }
+  }
+  
+  return workdays;
+}
+
+// Calculate workdays elapsed so far in the current month
+export function getWorkdaysElapsed(year: number, month: number, currentDay: number): number {
+  const firstDay = new Date(year, month, 1);
+  const today = new Date(year, month, currentDay);
+  let workdays = 0;
+  
+  for (let d = new Date(firstDay); d <= today; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      workdays++;
+    }
+  }
+  
+  return workdays;
+}
+
+// Calculate expected budget based on workdays elapsed
+export function calculateExpectedBudget(monthlyGoal: number, workdaysInMonth: number, workdaysElapsed: number): number {
+  if (workdaysInMonth === 0) return 0;
+  const dailyTarget = monthlyGoal / workdaysInMonth;
+  return dailyTarget * workdaysElapsed;
+}
+
+// Check if a salesperson is behind on their workday budget
+export function isUnderWorkdayBudget(currentDb: number, monthlyGoal: number): boolean {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
+  
+  const workdaysInMonth = getWorkdaysInMonth(year, month);
+  const workdaysElapsed = getWorkdaysElapsed(year, month, day);
+  const expectedBudget = calculateExpectedBudget(monthlyGoal, workdaysInMonth, workdaysElapsed);
+  
+  return currentDb < expectedBudget;
+}
+
+// Get workday budget info for display
+export function getWorkdayBudgetInfo(currentDb: number, monthlyGoal: number): {
+  workdaysInMonth: number;
+  workdaysElapsed: number;
+  workdaysRemaining: number;
+  dailyTarget: number;
+  expectedBudget: number;
+  actualDb: number;
+  difference: number;
+  isUnderBudget: boolean;
+  requiredDailyToHitGoal: number;
+} {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
+  
+  const workdaysInMonth = getWorkdaysInMonth(year, month);
+  const workdaysElapsed = getWorkdaysElapsed(year, month, day);
+  const workdaysRemaining = workdaysInMonth - workdaysElapsed;
+  const dailyTarget = monthlyGoal / workdaysInMonth;
+  const expectedBudget = calculateExpectedBudget(monthlyGoal, workdaysInMonth, workdaysElapsed);
+  const difference = currentDb - expectedBudget;
+  const isUnderBudget = difference < 0;
+  
+  // Calculate required daily amount to still hit the monthly goal
+  const remainingToGoal = monthlyGoal - currentDb;
+  const requiredDailyToHitGoal = workdaysRemaining > 0 ? remainingToGoal / workdaysRemaining : remainingToGoal;
+  
+  return {
+    workdaysInMonth,
+    workdaysElapsed,
+    workdaysRemaining,
+    dailyTarget: Math.round(dailyTarget),
+    expectedBudget: Math.round(expectedBudget),
+    actualDb: Math.round(currentDb),
+    difference: Math.round(difference),
+    isUnderBudget,
+    requiredDailyToHitGoal: Math.round(requiredDailyToHitGoal),
+  };
+}
+
+// Fetch individual goals from Google Sheets (GOALS sheet)
+export async function fetchSalesGoals(): Promise<Record<string, number>> {
+  try {
+    const sheets = await getAuthenticatedSheetsClient();
+    
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'GOALS!A2:B10',
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    
+    const rows = response.data.values || [];
+    const goals: Record<string, number> = { ...DEFAULT_GOALS };
+    
+    rows.forEach((row) => {
+      const name = row[0];
+      const goal = row[1];
+      
+      if (name && typeof goal === 'number') {
+        // Match to display name
+        const matchedName = matchSalesperson(name);
+        if (matchedName) {
+          goals[matchedName] = goal;
+        }
+      }
+    });
+    
+    return goals;
+  } catch (error) {
+    // If GOALS sheet doesn't exist, return defaults
+    console.log('GOALS sheet not found, using defaults');
+    return { ...DEFAULT_GOALS };
+  }
+}
+
+// Update a salesperson's goal in Google Sheets
+export async function updateSalesGoal(name: string, goal: number): Promise<void> {
+  const sheets = await getAuthenticatedSheetsClient();
+  
+  // First, try to read existing goals
+  let existingRows: any[][] = [];
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'GOALS!A2:B10',
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    existingRows = response.data.values || [];
+  } catch (error) {
+    // Sheet might not exist yet
+  }
+  
+  // Find if this person already has a row
+  let rowIndex = -1;
+  for (let i = 0; i < existingRows.length; i++) {
+    const matchedName = matchSalesperson(existingRows[i][0]);
+    if (matchedName === name) {
+      rowIndex = i + 2; // +2 because we start at A2
+      break;
+    }
+  }
+  
+  if (rowIndex > 0) {
+    // Update existing row
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `GOALS!A${rowIndex}:B${rowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[name, goal]] },
+    });
+  } else {
+    // Append new row
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'GOALS!A:B',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[name, goal]] },
+    });
+  }
+}
+
+// Get all goals with budget info for each salesperson
+export async function fetchDashboardDataWithBudget(timePeriod: 'daily' | 'monthly' | 'yearly' = 'monthly') {
+  // Fetch regular dashboard data
+  const dashboardData = await fetchDashboardData(timePeriod);
+  
+  // Fetch individual goals
+  const goals = await fetchSalesGoals();
+  
+  // Add budget info to each person
+  const leaderboardWithBudget = dashboardData.leaderboard.map(person => {
+    const monthlyGoal = goals[person.name] || DEFAULT_GOALS[person.name] || 100000;
+    const budgetInfo = getWorkdayBudgetInfo(person.db, monthlyGoal);
+    
+    return {
+      ...person,
+      monthlyGoal,
+      goalProgress: (person.db / monthlyGoal) * 100,
+      budgetInfo,
+    };
+  });
+  
+  return {
+    ...dashboardData,
+    leaderboard: leaderboardWithBudget,
+    goals,
+  };
+}
