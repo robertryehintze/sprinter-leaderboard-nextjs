@@ -178,16 +178,17 @@ export default function TVDashboard() {
   
   const getMedal = (i: number) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
 
+  // Enhanced Glassmorphism 2.0 styles
   const getCardStyle = (index: number) => {
-    const baseGlass = 'backdrop-blur-xl bg-white/[0.03]';
+    const baseGlass = 'backdrop-blur-2xl bg-white/[0.04] hover:bg-white/[0.06] transition-all duration-300';
     if (index === 0) {
-      return `${baseGlass} border border-amber-300/40 shadow-[0_0_25px_rgba(251,191,36,0.15),inset_0_1px_0_rgba(255,255,255,0.1)]`;
+      return `${baseGlass} border border-amber-300/50 shadow-[0_0_30px_rgba(251,191,36,0.2),0_0_60px_rgba(251,191,36,0.1),inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.1)] hover:shadow-[0_0_40px_rgba(251,191,36,0.3),0_0_80px_rgba(251,191,36,0.15)]`;
     } else if (index === 1) {
-      return `${baseGlass} border border-slate-300/30 shadow-[0_0_20px_rgba(203,213,225,0.1),inset_0_1px_0_rgba(255,255,255,0.08)]`;
+      return `${baseGlass} border border-slate-300/40 shadow-[0_0_25px_rgba(203,213,225,0.15),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(0,0,0,0.08)] hover:shadow-[0_0_35px_rgba(203,213,225,0.2)]`;
     } else if (index === 2) {
-      return `${baseGlass} border border-amber-600/30 shadow-[0_0_18px_rgba(217,119,6,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]`;
+      return `${baseGlass} border border-amber-600/40 shadow-[0_0_22px_rgba(217,119,6,0.15),inset_0_1px_0_rgba(255,255,255,0.1),inset_0_-1px_0_rgba(0,0,0,0.08)] hover:shadow-[0_0_30px_rgba(217,119,6,0.2)]`;
     } else {
-      return `${baseGlass} border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]`;
+      return `${baseGlass} border border-white/[0.12] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-1px_0_rgba(0,0,0,0.05)] hover:border-white/[0.18]`;
     }
   };
   
@@ -207,12 +208,27 @@ export default function TVDashboard() {
   const currentMonth = getCurrentMonthName();
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-4 md:p-8 overflow-hidden">
-      {/* Animated background glow effects */}
+    <div className="min-h-screen text-white p-4 md:p-8 overflow-hidden relative">
+      {/* Animated Gradient Background */}
+      <div className="fixed inset-0 bg-gradient-animate" />
+      
+      {/* Particle Effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl animate-float-slow" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl animate-float-slow-reverse" />
-        <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl animate-float-medium" />
+        {/* Floating particles */}
+        <div className="particle particle-1" />
+        <div className="particle particle-2" />
+        <div className="particle particle-3" />
+        <div className="particle particle-4" />
+        <div className="particle particle-5" />
+        <div className="particle particle-6" />
+        <div className="particle particle-7" />
+        <div className="particle particle-8" />
+        
+        {/* Animated glow orbs */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/8 rounded-full blur-3xl animate-float-slow animate-pulse-glow" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/8 rounded-full blur-3xl animate-float-slow-reverse animate-pulse-glow-delayed" />
+        <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-amber-500/6 rounded-full blur-3xl animate-float-medium" />
+        <div className="absolute top-1/2 right-1/3 w-48 h-48 bg-violet-500/5 rounded-full blur-3xl animate-float-slow" />
       </div>
       
       <div className="relative z-10">
@@ -395,18 +411,84 @@ export default function TVDashboard() {
       
       {/* CSS Animations */}
       <style jsx global>{`
+        /* Animated Gradient Background */
+        .bg-gradient-animate {
+          background: linear-gradient(-45deg, 
+            #0f172a, #1e1b4b, #0f172a, #134e4a, 
+            #0f172a, #1e1b4b, #0f172a);
+          background-size: 400% 400%;
+          animation: gradient-shift 15s ease infinite;
+        }
+        
+        @keyframes gradient-shift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        
+        /* Particle Effects */
+        .particle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 50%;
+          animation: particle-float 20s infinite linear;
+        }
+        
+        .particle-1 { left: 10%; top: 20%; animation-delay: 0s; animation-duration: 25s; }
+        .particle-2 { left: 20%; top: 80%; animation-delay: -5s; animation-duration: 20s; }
+        .particle-3 { left: 35%; top: 50%; animation-delay: -10s; animation-duration: 28s; }
+        .particle-4 { left: 50%; top: 30%; animation-delay: -7s; animation-duration: 22s; }
+        .particle-5 { left: 65%; top: 70%; animation-delay: -3s; animation-duration: 26s; }
+        .particle-6 { left: 80%; top: 40%; animation-delay: -12s; animation-duration: 24s; }
+        .particle-7 { left: 90%; top: 60%; animation-delay: -8s; animation-duration: 21s; }
+        .particle-8 { left: 45%; top: 10%; animation-delay: -15s; animation-duration: 27s; }
+        
+        @keyframes particle-float {
+          0% {
+            transform: translateY(100vh) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            opacity: 0.6;
+          }
+          90% {
+            opacity: 0.6;
+          }
+          100% {
+            transform: translateY(-100vh) rotate(720deg);
+            opacity: 0;
+          }
+        }
+        
+        /* Enhanced floating animations */
         @keyframes float-slow {
-          0%, 100% { transform: translateY(0) translateX(0); }
-          50% { transform: translateY(-20px) translateX(10px); }
+          0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+          25% { transform: translateY(-15px) translateX(10px) scale(1.02); }
+          50% { transform: translateY(-25px) translateX(5px) scale(1); }
+          75% { transform: translateY(-10px) translateX(-5px) scale(0.98); }
         }
         @keyframes float-slow-reverse {
-          0%, 100% { transform: translateY(0) translateX(0); }
-          50% { transform: translateY(20px) translateX(-10px); }
+          0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+          25% { transform: translateY(15px) translateX(-10px) scale(0.98); }
+          50% { transform: translateY(25px) translateX(-5px) scale(1); }
+          75% { transform: translateY(10px) translateX(5px) scale(1.02); }
         }
         @keyframes float-medium {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-15px); }
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-20px) scale(1.05); }
         }
+        
+        /* Pulse glow for orbs */
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.1); }
+        }
+        .animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
+        .animate-pulse-glow-delayed { animation: pulse-glow 4s ease-in-out infinite 2s; }
+        
+        /* Card and element animations */
         @keyframes fade-in {
           from { opacity: 0; transform: translateY(-10px); }
           to { opacity: 1; transform: translateY(0); }
@@ -417,16 +499,23 @@ export default function TVDashboard() {
         }
         @keyframes bounce-subtle {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.1); }
+          50% { transform: scale(1.15); }
         }
         @keyframes glow {
           0%, 100% { text-shadow: 0 0 10px rgba(52, 211, 153, 0.5); }
-          50% { text-shadow: 0 0 20px rgba(52, 211, 153, 0.8), 0 0 30px rgba(52, 211, 153, 0.4); }
+          50% { text-shadow: 0 0 25px rgba(52, 211, 153, 0.9), 0 0 40px rgba(52, 211, 153, 0.5), 0 0 60px rgba(52, 211, 153, 0.3); }
         }
         @keyframes pulse-subtle {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.8; }
+          0%, 100% { opacity: 1; box-shadow: 0 0 10px currentColor; }
+          50% { opacity: 0.85; box-shadow: 0 0 20px currentColor; }
         }
+        
+        /* Shimmer effect for glass cards */
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        
         .animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
         .animate-float-slow-reverse { animation: float-slow-reverse 10s ease-in-out infinite; }
         .animate-float-medium { animation: float-medium 6s ease-in-out infinite; }
