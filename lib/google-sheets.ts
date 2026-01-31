@@ -132,3 +132,105 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
     totalRetention: leaderboard.reduce((sum, s) => sum + s.retention, 0),
   };
 }
+
+// Hall of Fame - Get winners from previous months
+export async function fetchHallOfFame() {
+  const sheets = await getAuthenticatedSheetsClient();
+  
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: 'SALG (INPUT) v2!A2:N1000',
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  
+  const rows = response.data.values || [];
+  const salespeople = ['Niels Larsen', 'Robert', 'Søgaard', 'Frank', 'Jeppe', 'Kristofer'];
+  
+  // Group data by month
+  const monthlyData: Record<string, Record<string, { db: number; meetings: number }>> = {};
+  
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  
+  rows.forEach((row) => {
+    const dateValue = row[0];
+    const seller = row[1];
+    const dbValue = row[10];
+    const meeting = row[12];
+    
+    let rowDate: Date;
+    if (typeof dateValue === 'number') {
+      rowDate = new Date((dateValue - 25569) * 86400 * 1000);
+    } else if (typeof dateValue === 'string') {
+      const parts = dateValue.split('-');
+      if (parts.length === 3) {
+        rowDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      } else return;
+    } else return;
+    
+    const monthKey = `${rowDate.getFullYear()}-${String(rowDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    // Skip current month - that's shown in main leaderboard
+    if (monthKey === currentMonth) return;
+    
+    const matchedSeller = salespeople.find(name => 
+      seller && name.toLowerCase().includes(seller.toString().toLowerCase().trim())
+    );
+    if (!matchedSeller) return;
+    
+    if (!monthlyData[monthKey]) {
+      monthlyData[monthKey] = {};
+      salespeople.forEach(name => {
+        monthlyData[monthKey][name] = { db: 0, meetings: 0 };
+      });
+    }
+    
+    let db = 0;
+    if (typeof dbValue === 'number') {
+      db = dbValue;
+    } else if (typeof dbValue === 'string') {
+      const cleanValue = dbValue.replace(/kr\s*/i, '').replace(/\./g, '').replace(',', '.');
+      db = parseFloat(cleanValue) || 0;
+    }
+    
+    monthlyData[monthKey][matchedSeller].db += db;
+    if (meeting === 'JA') monthlyData[monthKey][matchedSeller].meetings += 1;
+  });
+  
+  // Calculate winners for each month
+  const monthNames: Record<string, string> = {
+    '01': 'Januar', '02': 'Februar', '03': 'Marts', '04': 'April',
+    '05': 'Maj', '06': 'Juni', '07': 'Juli', '08': 'August',
+    '09': 'September', '10': 'Oktober', '11': 'November', '12': 'December'
+  };
+  
+  const hallOfFame = Object.entries(monthlyData)
+    .map(([monthKey, sellers]) => {
+      const [year, month] = monthKey.split('-');
+      const monthName = monthNames[month] || month;
+      
+      // Find DB winner
+      let dbWinner = { name: '', db: 0 };
+      let meetingsWinner = { name: '', meetings: 0 };
+      
+      Object.entries(sellers).forEach(([name, data]) => {
+        if (data.db > dbWinner.db) {
+          dbWinner = { name, db: data.db };
+        }
+        if (data.meetings > meetingsWinner.meetings) {
+          meetingsWinner = { name, meetings: data.meetings };
+        }
+      });
+      
+      return {
+        monthKey,
+        monthLabel: `${monthName} ${year}`,
+        dbWinner,
+        meetingsWinner,
+      };
+    })
+    .filter(m => m.dbWinner.db > 0 || m.meetingsWinner.meetings > 0)
+    .sort((a, b) => b.monthKey.localeCompare(a.monthKey)); // Most recent first
+  
+  return hallOfFame;
+}

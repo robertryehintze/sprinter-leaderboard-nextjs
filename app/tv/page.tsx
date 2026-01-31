@@ -18,20 +18,43 @@ interface DashboardData {
   totalRetention: number;
 }
 
+interface HallOfFameEntry {
+  monthKey: string;
+  monthLabel: string;
+  dbWinner: { name: string; db: number };
+  meetingsWinner: { name: string; meetings: number };
+}
+
 // Goals
 const DB_GOAL = 100000; // 100.000 kr monthly DB goal
 const MEETINGS_GOAL = 6; // 6 meetings monthly goal
 
+// Get current month name in Danish
+const getCurrentMonthName = () => {
+  const monthNames = ['Januar', 'Februar', 'Marts', 'April', 'Maj', 'Juni', 
+                      'Juli', 'August', 'September', 'Oktober', 'November', 'December'];
+  const now = new Date();
+  return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+};
+
 export default function TVDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
   const fetchData = async () => {
     try {
-      const response = await fetch('/api/dashboard?timePeriod=monthly');
-      const result = await response.json();
-      setData(result);
+      const [dashboardRes, hofRes] = await Promise.all([
+        fetch('/api/dashboard?timePeriod=monthly'),
+        fetch('/api/hall-of-fame')
+      ]);
+      
+      const dashboardData = await dashboardRes.json();
+      const hofData = await hofRes.json();
+      
+      setData(dashboardData);
+      setHallOfFame(Array.isArray(hofData) ? hofData : []);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Fetch error:', err);
@@ -72,7 +95,7 @@ export default function TVDashboard() {
 
   // Sort by meetings for meetings leaderboard
   const meetingsLeaderboard = [...data.leaderboard].sort((a, b) => b.meetings - a.meetings);
-  const maxMeetings = Math.max(...meetingsLeaderboard.map(p => p.meetings), 1);
+  const currentMonth = getCurrentMonthName();
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-8">
@@ -80,6 +103,7 @@ export default function TVDashboard() {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl" />
       </div>
       
       <div className="relative z-10">
@@ -97,7 +121,7 @@ export default function TVDashboard() {
         <div className="grid grid-cols-2 gap-8 mb-8">
           {/* DB Leaderboard */}
           <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-3xl p-6 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)]">
-            <h2 className="text-2xl font-semibold mb-5 text-teal-200/90 tracking-wide">💰 DB Leaderboard - Januar 2026</h2>
+            <h2 className="text-2xl font-semibold mb-5 text-teal-200/90 tracking-wide">💰 DB Leaderboard - {currentMonth}</h2>
             <div className="space-y-3">
               {data.leaderboard.map((person, index) => {
                 const isOverGoal = person.db >= DB_GOAL;
@@ -142,7 +166,7 @@ export default function TVDashboard() {
 
           {/* Meetings Leaderboard */}
           <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-3xl p-6 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)]">
-            <h2 className="text-2xl font-semibold mb-5 text-indigo-200/90 tracking-wide">📅 Møde Leaderboard - Januar 2026</h2>
+            <h2 className="text-2xl font-semibold mb-5 text-indigo-200/90 tracking-wide">📅 Møde Leaderboard - {currentMonth}</h2>
             <div className="space-y-3">
               {meetingsLeaderboard.map((person, index) => {
                 const isOverGoal = person.meetings >= MEETINGS_GOAL;
@@ -182,6 +206,47 @@ export default function TVDashboard() {
             </div>
           </div>
         </div>
+        
+        {/* Hall of Fame Section */}
+        {hallOfFame.length > 0 && (
+          <div className="mb-8">
+            <div className="backdrop-blur-xl bg-amber-500/[0.04] rounded-3xl p-6 border border-amber-400/20 shadow-[0_0_40px_rgba(251,191,36,0.06)]">
+              <h2 className="text-2xl font-semibold mb-5 text-amber-200/90 tracking-wide">🏅 Hall of Fame</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {hallOfFame.slice(0, 6).map((entry) => (
+                  <div key={entry.monthKey} className="backdrop-blur-xl bg-white/[0.03] rounded-2xl p-4 border border-amber-300/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                    <div className="text-sm text-amber-300/80 font-semibold mb-3">{entry.monthLabel}</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">💰</span>
+                          <span className="text-white/80 text-sm">{entry.dbWinner.name}</span>
+                        </div>
+                        <span className="text-teal-300/90 text-sm font-semibold">
+                          {entry.dbWinner.db.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📅</span>
+                          <span className="text-white/80 text-sm">{entry.meetingsWinner.name}</span>
+                        </div>
+                        <span className="text-indigo-300/90 text-sm font-semibold">
+                          {entry.meetingsWinner.meetings} {entry.meetingsWinner.meetings === 1 ? 'møde' : 'møder'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {hallOfFame.length === 0 && (
+                <div className="text-center text-white/40 py-8">
+                  Ingen tidligere vindere endnu - første måned!
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         
         {/* Summary stats with premium glass effect */}
         <div className="grid grid-cols-3 gap-6">
