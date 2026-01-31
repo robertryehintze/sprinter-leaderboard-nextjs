@@ -56,6 +56,35 @@ export async function appendSaleToSheet(rowData: any[]) {
   return response.data;
 }
 
+// Salesperson aliases - maps various name formats to display name
+const SALESPERSON_ALIASES: Record<string, string[]> = {
+  'Niels': ['niels', 'niels larsen'],
+  'Robert': ['robert'],
+  'Søgaard': ['søgaard', 'michael søgaard', 'michael'],
+  'Frank': ['frank', 'vilholt', 'vilholt-johannsen', 'fvj', 'frank vilholt', 'frank vilholt-johannsen'],
+  'Jeppe': ['jeppe'],
+  'Kristofer': ['kristofer'],
+};
+
+// Get display names for salespeople
+const SALESPEOPLE = Object.keys(SALESPERSON_ALIASES);
+
+// Match seller name from sheet to display name
+function matchSalesperson(sellerName: string | undefined | null): string | null {
+  if (!sellerName) return null;
+  const normalized = sellerName.toString().toLowerCase().trim();
+  
+  for (const [displayName, aliases] of Object.entries(SALESPERSON_ALIASES)) {
+    for (const alias of aliases) {
+      // Check if the normalized name contains the alias or vice versa
+      if (normalized.includes(alias) || alias.includes(normalized)) {
+        return displayName;
+      }
+    }
+  }
+  return null;
+}
+
 export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'yearly' = 'monthly') {
   const sheets = await getAuthenticatedSheetsClient();
   
@@ -66,10 +95,9 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
   });
   
   const rows = response.data.values || [];
-  const salespeople = ['Niels Larsen', 'Robert', 'Søgaard', 'Frank', 'Jeppe', 'Kristofer'];
   
   const salesData: Record<string, { db: number; meetings: number; retention: number }> = {};
-  salespeople.forEach(name => {
+  SALESPEOPLE.forEach(name => {
     salesData[name] = { db: 0, meetings: 0, retention: 0 };
   });
   
@@ -99,9 +127,7 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
     
     if (rowDate < filterDate) return;
     
-    const matchedSeller = salespeople.find(name => 
-      seller && name.toLowerCase().includes(seller.toString().toLowerCase().trim())
-    );
+    const matchedSeller = matchSalesperson(seller);
     if (!matchedSeller) return;
     
     let db = 0;
@@ -117,7 +143,7 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
     if (retention === 'JA') salesData[matchedSeller].retention += db;
   });
   
-  const leaderboard = salespeople.map(name => ({
+  const leaderboard = SALESPEOPLE.map(name => ({
     name,
     db: salesData[name].db,
     meetings: salesData[name].meetings,
@@ -144,7 +170,6 @@ export async function fetchHallOfFame() {
   });
   
   const rows = response.data.values || [];
-  const salespeople = ['Niels Larsen', 'Robert', 'Søgaard', 'Frank', 'Jeppe', 'Kristofer'];
   
   // Group data by month
   const monthlyData: Record<string, Record<string, { db: number; meetings: number }>> = {};
@@ -181,14 +206,12 @@ export async function fetchHallOfFame() {
     // Skip current month - that's shown in main leaderboard
     if (monthKey === currentMonth) return;
     
-    const matchedSeller = salespeople.find(name => 
-      seller && name.toLowerCase().includes(seller.toString().toLowerCase().trim())
-    );
+    const matchedSeller = matchSalesperson(seller);
     if (!matchedSeller) return;
     
     if (!monthlyData[monthKey]) {
       monthlyData[monthKey] = {};
-      salespeople.forEach(name => {
+      SALESPEOPLE.forEach(name => {
         monthlyData[monthKey][name] = { db: 0, meetings: 0 };
       });
     }
