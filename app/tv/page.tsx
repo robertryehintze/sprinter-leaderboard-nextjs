@@ -132,7 +132,7 @@ const ActivityFeed = ({ activities }: { activities: { name: string; amount: numb
   const current = activities[currentIndex];
   
   return (
-    <div className="fixed bottom-20 md:bottom-16 left-1/2 transform -translate-x-1/2 z-50 backdrop-blur-xl bg-white/[0.08] px-4 md:px-6 py-2 md:py-3 rounded-full border border-white/15 shadow-[0_0_30px_rgba(255,255,255,0.1)] animate-slide-in-up">
+    <div className="fixed bottom-24 md:bottom-16 left-1/2 transform -translate-x-1/2 z-[100] backdrop-blur-xl bg-slate-900/90 px-4 md:px-6 py-2 md:py-3 rounded-full border border-white/20 shadow-[0_0_30px_rgba(255,255,255,0.15)] animate-slide-in-up">
       <div className="flex items-center gap-3 text-sm">
         <span className="text-emerald-400 animate-pulse">●</span>
         <span className="text-white/80">
