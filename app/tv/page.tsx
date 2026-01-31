@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 
 interface SalespersonData {
@@ -9,6 +9,7 @@ interface SalespersonData {
   meetings: number;
   retention: number;
   goalProgress: number;
+  salesCount?: number; // For "on fire" detection
 }
 
 interface DashboardData {
@@ -16,6 +17,7 @@ interface DashboardData {
   totalDb: number;
   totalMeetings: number;
   totalRetention: number;
+  recentSales?: { name: string; amount: number; time: string }[];
 }
 
 interface HallOfFameEntry {
@@ -29,6 +31,71 @@ interface HallOfFameEntry {
 const DB_GOAL = 100000;
 const MEETINGS_GOAL = 6;
 
+// Confetti Component
+const Confetti = ({ active }: { active: boolean }) => {
+  if (!active) return null;
+  
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      {[...Array(50)].map((_, i) => (
+        <div
+          key={i}
+          className="confetti-piece"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 0.5}s`,
+            backgroundColor: ['#fbbf24', '#34d399', '#60a5fa', '#f472b6', '#a78bfa'][Math.floor(Math.random() * 5)],
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+// Fire Icon Component
+const FireIcon = ({ animate }: { animate: boolean }) => (
+  <span className={`inline-block ${animate ? 'animate-fire' : ''}`}>🔥</span>
+);
+
+// Rank Change Indicator
+const RankIndicator = ({ change }: { change: number }) => {
+  if (change === 0) return null;
+  if (change > 0) {
+    return <span className="text-emerald-400 text-xs ml-1 animate-bounce-in">↑{change}</span>;
+  }
+  return <span className="text-red-400 text-xs ml-1 animate-bounce-in">↓{Math.abs(change)}</span>;
+};
+
+// Live Activity Feed Component
+const ActivityFeed = ({ activities }: { activities: { name: string; amount: number; time: string }[] }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  
+  useEffect(() => {
+    if (activities.length === 0) return;
+    const interval = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % activities.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activities.length]);
+  
+  if (activities.length === 0) return null;
+  
+  const current = activities[currentIndex];
+  
+  return (
+    <div className="fixed bottom-16 left-1/2 transform -translate-x-1/2 backdrop-blur-xl bg-white/[0.05] px-6 py-3 rounded-full border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)] animate-slide-in-up">
+      <div className="flex items-center gap-3 text-sm">
+        <span className="text-emerald-400 animate-pulse">●</span>
+        <span className="text-white/80">
+          <span className="font-semibold text-white">{current.name}</span> lukkede netop{' '}
+          <span className="text-teal-300 font-semibold">{current.amount.toLocaleString('da-DK')} kr</span>
+        </span>
+        <span className="text-white/30 text-xs">{current.time}</span>
+      </div>
+    </div>
+  );
+};
+
 // Animated Number Counter Hook
 const useAnimatedNumber = (targetValue: number, duration: number = 1500) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -41,8 +108,6 @@ const useAnimatedNumber = (targetValue: number, duration: number = 1500) => {
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Easing function for smooth animation
       const easeOutQuart = 1 - Math.pow(1 - progress, 4);
       const currentValue = startValue + (targetValue - startValue) * easeOutQuart;
       
@@ -147,9 +212,19 @@ export default function TVDashboard() {
   const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [dataKey, setDataKey] = useState(0); // Force re-render for animations
+  const [dataKey, setDataKey] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
+  const [rankChanges, setRankChanges] = useState<Record<string, number>>({});
   
-  const fetchData = async () => {
+  // Mock recent sales for activity feed (in real app, this would come from API)
+  const [recentSales] = useState([
+    { name: 'Niels', amount: 12034, time: '14:32' },
+    { name: 'Robert', amount: 3500, time: '13:45' },
+    { name: 'Frank', amount: 8200, time: '12:20' },
+  ]);
+  
+  const fetchData = useCallback(async () => {
     try {
       const [dashboardRes, hofRes] = await Promise.all([
         fetch('/api/dashboard?timePeriod=monthly'),
@@ -159,16 +234,51 @@ export default function TVDashboard() {
       const dashboardData = await dashboardRes.json();
       const hofData = await hofRes.json();
       
+      // Calculate rank changes
+      if (data?.leaderboard) {
+        const newRanks: Record<string, number> = {};
+        const changes: Record<string, number> = {};
+        
+        dashboardData.leaderboard.forEach((person: SalespersonData, index: number) => {
+          newRanks[person.name] = index;
+          if (previousRanks[person.name] !== undefined) {
+            changes[person.name] = previousRanks[person.name] - index;
+          }
+        });
+        
+        setPreviousRanks(newRanks);
+        setRankChanges(changes);
+      } else {
+        // First load - set initial ranks
+        const initialRanks: Record<string, number> = {};
+        dashboardData.leaderboard.forEach((person: SalespersonData, index: number) => {
+          initialRanks[person.name] = index;
+        });
+        setPreviousRanks(initialRanks);
+      }
+      
+      // Check for goal achievements and trigger confetti
+      const anyoneReachedGoal = dashboardData.leaderboard.some(
+        (person: SalespersonData) => person.db >= DB_GOAL && 
+        (!data?.leaderboard.find(p => p.name === person.name) || 
+         data.leaderboard.find(p => p.name === person.name)!.db < DB_GOAL)
+      );
+      
+      if (anyoneReachedGoal) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+      }
+      
       setData(dashboardData);
       setHallOfFame(Array.isArray(hofData) ? hofData : []);
       setLastUpdated(new Date());
-      setDataKey(prev => prev + 1); // Trigger animation reset
+      setDataKey(prev => prev + 1);
     } catch (err) {
       console.error('Fetch error:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [data, previousRanks]);
   
   useEffect(() => {
     fetchData();
@@ -178,7 +288,13 @@ export default function TVDashboard() {
   
   const getMedal = (i: number) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
 
-  // Enhanced Glassmorphism 2.0 styles
+  // Check if person is "on fire" (simulated - in real app would check sales count today)
+  const isOnFire = (name: string) => {
+    // Simulate: top performer with high goal progress is "on fire"
+    const person = data?.leaderboard.find(p => p.name === name);
+    return person && person.goalProgress >= 80;
+  };
+
   const getCardStyle = (index: number) => {
     const baseGlass = 'backdrop-blur-2xl bg-white/[0.04] hover:bg-white/[0.06] transition-all duration-300';
     if (index === 0) {
@@ -209,12 +325,14 @@ export default function TVDashboard() {
   
   return (
     <div className="min-h-screen text-white p-4 md:p-8 overflow-hidden relative">
+      {/* Confetti Effect */}
+      <Confetti active={showConfetti} />
+      
       {/* Animated Gradient Background */}
       <div className="fixed inset-0 bg-gradient-animate" />
       
       {/* Particle Effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        {/* Floating particles */}
         <div className="particle particle-1" />
         <div className="particle particle-2" />
         <div className="particle particle-3" />
@@ -224,7 +342,6 @@ export default function TVDashboard() {
         <div className="particle particle-7" />
         <div className="particle particle-8" />
         
-        {/* Animated glow orbs */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/8 rounded-full blur-3xl animate-float-slow animate-pulse-glow" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/8 rounded-full blur-3xl animate-float-slow-reverse animate-pulse-glow-delayed" />
         <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-amber-500/6 rounded-full blur-3xl animate-float-medium" />
@@ -232,7 +349,7 @@ export default function TVDashboard() {
       </div>
       
       <div className="relative z-10">
-        {/* Header with fade-in */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4 animate-fade-in">
           <h1 className="text-3xl md:text-5xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
           <div className="text-left md:text-right flex flex-row md:flex-col items-center md:items-end gap-3 md:gap-0">
@@ -243,7 +360,7 @@ export default function TVDashboard() {
           </div>
         </div>
         
-        {/* Summary Stats - Above Leaderboards */}
+        {/* Summary Stats */}
         <div className="grid grid-cols-3 gap-2 md:gap-6 mb-6 md:mb-8 animate-fade-in">
           <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-teal-400/15 shadow-[0_0_30px_rgba(20,184,166,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
             <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total DB</div>
@@ -265,7 +382,7 @@ export default function TVDashboard() {
           </div>
         </div>
         
-        {/* Leaderboards Grid */
+        {/* Leaderboards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-6 md:mb-8">
           {/* DB Leaderboard */}
           <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)] animate-slide-up">
@@ -274,6 +391,7 @@ export default function TVDashboard() {
               {data.leaderboard.map((person, index) => {
                 const isOverGoal = person.db >= DB_GOAL;
                 const missingAmount = DB_GOAL - person.db;
+                const onFire = isOnFire(person.name);
                 
                 return (
                   <AnimatedCard 
@@ -287,7 +405,11 @@ export default function TVDashboard() {
                           {getMedal(index)}
                         </div>
                         <div>
-                          <div className="text-base md:text-xl font-semibold text-white/95">{person.name}</div>
+                          <div className="text-base md:text-xl font-semibold text-white/95 flex items-center gap-1">
+                            {person.name}
+                            {onFire && <FireIcon animate={true} />}
+                            <RankIndicator change={rankChanges[person.name] || 0} />
+                          </div>
                           <div className="text-[10px] md:text-xs text-white/40 font-medium">
                             <AnimatedNumber value={Math.round(person.goalProgress * 10) / 10} />% af mål
                           </div>
@@ -404,12 +526,13 @@ export default function TVDashboard() {
           </div>
         )}
         
-
-        
         <div className="fixed bottom-2 right-2 md:bottom-4 md:right-4 backdrop-blur-xl bg-white/[0.03] px-2 md:px-4 py-1 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-sm text-white/30 border border-white/[0.08]">
           🔄 Auto-opdatering
         </div>
       </div>
+      
+      {/* Live Activity Feed */}
+      <ActivityFeed activities={recentSales} />
       
       {/* CSS Animations */}
       <style jsx global>{`
@@ -427,6 +550,50 @@ export default function TVDashboard() {
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
         }
+        
+        /* Confetti Animation */
+        .confetti-piece {
+          position: absolute;
+          width: 10px;
+          height: 10px;
+          top: -10px;
+          animation: confetti-fall 3s ease-out forwards;
+        }
+        
+        @keyframes confetti-fall {
+          0% {
+            transform: translateY(0) rotate(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(100vh) rotate(720deg);
+            opacity: 0;
+          }
+        }
+        
+        /* Fire Animation */
+        @keyframes fire-flicker {
+          0%, 100% { transform: scale(1) rotate(-5deg); }
+          25% { transform: scale(1.1) rotate(5deg); }
+          50% { transform: scale(1) rotate(-3deg); }
+          75% { transform: scale(1.15) rotate(3deg); }
+        }
+        .animate-fire { animation: fire-flicker 0.5s ease-in-out infinite; }
+        
+        /* Bounce In Animation */
+        @keyframes bounce-in {
+          0% { transform: scale(0); opacity: 0; }
+          50% { transform: scale(1.2); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-bounce-in { animation: bounce-in 0.4s ease-out; }
+        
+        /* Slide In Up Animation */
+        @keyframes slide-in-up {
+          0% { transform: translate(-50%, 100px); opacity: 0; }
+          100% { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .animate-slide-in-up { animation: slide-in-up 0.5s ease-out; }
         
         /* Particle Effects */
         .particle {
@@ -452,12 +619,8 @@ export default function TVDashboard() {
             transform: translateY(100vh) rotate(0deg);
             opacity: 0;
           }
-          10% {
-            opacity: 0.6;
-          }
-          90% {
-            opacity: 0.6;
-          }
+          10% { opacity: 0.6; }
+          90% { opacity: 0.6; }
           100% {
             transform: translateY(-100vh) rotate(720deg);
             opacity: 0;
@@ -510,12 +673,6 @@ export default function TVDashboard() {
         @keyframes pulse-subtle {
           0%, 100% { opacity: 1; box-shadow: 0 0 10px currentColor; }
           50% { opacity: 0.85; box-shadow: 0 0 20px currentColor; }
-        }
-        
-        /* Shimmer effect for glass cards */
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
         }
         
         .animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
