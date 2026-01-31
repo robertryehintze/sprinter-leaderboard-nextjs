@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
   
   return NextResponse.json({
+    email: email,
+    emailLength: email.length,
     hasPrivateKey: !!privateKey,
     keyLength: privateKey.length,
     startsWithBegin: privateKey.startsWith('-----BEGIN'),
