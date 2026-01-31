@@ -378,7 +378,7 @@ export default function TVDashboard() {
   const currentMonth = getCurrentMonthName();
   
   return (
-    <div className="min-h-screen text-white p-4 md:p-8 overflow-hidden relative">
+    <div className="min-h-screen text-white p-4 md:p-8 pb-32 md:pb-24 relative">
       {/* Confetti Effect */}
       <Confetti active={showConfetti} />
       
