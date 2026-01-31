@@ -39,22 +39,27 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     // Go to order list
     await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0' });
     
-    // Search for order in the table
+    // Search for order in the table - look for link with exact order ID text
     const orderData = await page.evaluate((targetOrderId) => {
-      const rows = document.querySelectorAll('table tr');
-      for (const row of rows) {
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 8) continue;
-        
-        const orderLink = cells[1]?.querySelector('a');
-        if (!orderLink) continue;
-        
-        const rowOrderId = orderLink.textContent?.trim() || '';
-        if (rowOrderId === targetOrderId) {
+      // Find all links that could be order IDs
+      const allLinks = document.querySelectorAll('a');
+      for (const link of allLinks) {
+        const text = link.textContent?.trim() || '';
+        if (text === targetOrderId) {
+          // Found the order link, now get the row
+          const row = link.closest('tr');
+          if (!row) continue;
+          
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 8) continue;
+          
+          // Based on debug output: cells[2] = customer, cells[7] = fortjeneste (DB)
           const customer = cells[2]?.textContent?.trim() || 'Unknown';
           const dbText = cells[7]?.textContent?.trim() || '0';
-          const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
-          return { found: true, customer, db, orderLink: orderLink.href };
+          // Parse Danish number format: "1 665,00" -> 1665.00
+          const db = parseFloat(dbText.replace(/\\s/g, '').replace(/\\./g, '').replace(',', '.')) || 0;
+          
+          return { found: true, customer, db, orderLink: link.href };
         }
       }
       return { found: false };
@@ -127,6 +132,16 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
   }
 
   // Use Browserless /function API with Puppeteer syntax
+  // Based on debug output, the table structure is:
+  // Column 0: # (order ID link)
+  // Column 1: Distributør# (another link with order ID)
+  // Column 2: Kunde (customer)
+  // Column 3: Ordre dato
+  // Column 4: Betaling
+  // Column 5: Status
+  // Column 6: Ordresum
+  // Column 7: Fortjeneste (DB)
+  // Column 8: Fortjeneste%
   const script = `export default async function ({ page }) {
   const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
   const site = '${site}';
@@ -145,37 +160,47 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
     // Go to order list
     await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0' });
     
-    // Extract all orders from the first page (most recent)
+    // Extract all orders - find rows with order ID links
     const orders = await page.evaluate(() => {
-      const rows = document.querySelectorAll('table tr');
       const orderList = [];
       
-      rows.forEach((row, index) => {
-        if (index === 0) return; // Skip header
-        
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 8) return;
-        
-        const orderLink = cells[1]?.querySelector('a');
-        if (!orderLink) return;
-        
-        const orderId = orderLink.textContent?.trim() || '';
-        if (!orderId || isNaN(parseInt(orderId))) return;
-        
-        const customer = cells[2]?.textContent?.trim() || '';
-        const dbText = cells[7]?.textContent?.trim() || '0';
-        const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
-        
-        // Get date from first cell
-        const dateText = cells[0]?.textContent?.trim() || '';
-        
-        orderList.push({
-          orderId,
-          customer,
-          db,
-          date: dateText
-        });
-      });
+      // Find all links that look like order IDs (5-digit numbers)
+      const allLinks = document.querySelectorAll('a');
+      const seenOrderIds = new Set();
+      
+      for (const link of allLinks) {
+        const text = link.textContent?.trim() || '';
+        // Check if it's a 5-digit order ID
+        if (/^[0-9]{5}$/.test(text) && !seenOrderIds.has(text)) {
+          seenOrderIds.add(text);
+          
+          // Get the row
+          const row = link.closest('tr');
+          if (!row) continue;
+          
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 8) continue;
+          
+          // Extract data based on column positions
+          const orderId = text;
+          const customer = cells[2]?.textContent?.trim() || '';
+          const dateText = cells[3]?.textContent?.trim() || '';
+          const dbText = cells[7]?.textContent?.trim() || '0';
+          
+          // Parse Danish number format: "1 665,00" -> 1665.00
+          const db = parseFloat(dbText.replace(/\\s/g, '').replace(/\\./g, '').replace(',', '.')) || 0;
+          
+          // Extract just the date part (before time)
+          const datePart = dateText.split(' ')[0] || dateText;
+          
+          orderList.push({
+            orderId,
+            customer,
+            db,
+            date: datePart
+          });
+        }
+      }
       
       return orderList;
     });
