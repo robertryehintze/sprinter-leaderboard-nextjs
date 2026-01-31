@@ -18,6 +18,10 @@ interface DashboardData {
   totalRetention: number;
 }
 
+// Goals
+const DB_GOAL = 100000; // 100.000 kr monthly DB goal
+const MEETINGS_GOAL = 6; // 6 meetings monthly goal
+
 export default function TVDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,32 +99,44 @@ export default function TVDashboard() {
           <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-3xl p-6 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)]">
             <h2 className="text-2xl font-semibold mb-5 text-teal-200/90 tracking-wide">💰 DB Leaderboard - Januar 2026</h2>
             <div className="space-y-3">
-              {data.leaderboard.map((person, index) => (
-                <div key={person.name} className={`p-4 rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="text-3xl font-bold w-12 text-center opacity-90">{getMedal(index)}</div>
-                      <div>
-                        <div className="text-xl font-semibold text-white/95">{person.name}</div>
-                        <div className="text-xs text-white/40 font-medium">{person.goalProgress.toFixed(1)}% af mål</div>
+              {data.leaderboard.map((person, index) => {
+                const isOverGoal = person.db >= DB_GOAL;
+                const missingAmount = DB_GOAL - person.db;
+                
+                return (
+                  <div key={person.name} className={`p-4 rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="text-3xl font-bold w-12 text-center opacity-90">{getMedal(index)}</div>
+                        <div>
+                          <div className="text-xl font-semibold text-white/95">{person.name}</div>
+                          <div className="text-xs text-white/40 font-medium">{person.goalProgress.toFixed(1)}% af mål</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-2xl font-bold ${isOverGoal ? 'text-emerald-400' : 'text-white/95'}`}>
+                          {person.db.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr
+                        </div>
+                        {!isOverGoal && (
+                          <div className="text-xs text-white/30 font-medium">
+                            mangler {missingAmount.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-white/95">{person.db.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr</div>
+                    <div className="mt-3">
+                      <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-700 ${
+                          index === 0 
+                            ? 'bg-gradient-to-r from-teal-400/80 to-teal-300/90 shadow-[0_0_12px_rgba(94,234,212,0.4)]' 
+                            : 'bg-gradient-to-r from-teal-500/60 to-teal-400/70 shadow-[0_0_8px_rgba(20,184,166,0.3)]'
+                        }`}
+                          style={{ width: `${Math.min(person.goalProgress, 100)}%` }} />
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-700 ${
-                        index === 0 
-                          ? 'bg-gradient-to-r from-teal-400/80 to-teal-300/90 shadow-[0_0_12px_rgba(94,234,212,0.4)]' 
-                          : 'bg-gradient-to-r from-teal-500/60 to-teal-400/70 shadow-[0_0_8px_rgba(20,184,166,0.3)]'
-                      }`}
-                        style={{ width: `${Math.min(person.goalProgress, 100)}%` }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -128,32 +144,41 @@ export default function TVDashboard() {
           <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-3xl p-6 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)]">
             <h2 className="text-2xl font-semibold mb-5 text-indigo-200/90 tracking-wide">📅 Møde Leaderboard - Januar 2026</h2>
             <div className="space-y-3">
-              {meetingsLeaderboard.map((person, index) => (
-                <div key={person.name} className={`p-4 rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="text-3xl font-bold w-12 text-center opacity-90">{getMedal(index)}</div>
-                      <div>
-                        <div className="text-xl font-semibold text-white/95">{person.name}</div>
-                        <div className="text-xs text-white/40 font-medium">{person.db.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr DB</div>
+              {meetingsLeaderboard.map((person, index) => {
+                const isOverGoal = person.meetings >= MEETINGS_GOAL;
+                
+                return (
+                  <div key={person.name} className={`p-4 rounded-2xl transition-all duration-500 ${getCardStyle(index)}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="text-3xl font-bold w-12 text-center opacity-90">{getMedal(index)}</div>
+                        <div>
+                          <div className="text-xl font-semibold text-white/95">{person.name}</div>
+                          <div className="text-xs text-white/40 font-medium">
+                            <span className={isOverGoal ? 'text-emerald-400' : 'text-white/40'}>{person.meetings}</span>
+                            <span className="text-white/40">/{MEETINGS_GOAL} møder</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-2xl font-bold ${isOverGoal ? 'text-emerald-400' : 'text-white/95'}`}>
+                          {person.meetings} {person.meetings === 1 ? 'møde' : 'møder'}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-white/95">{person.meetings} {person.meetings === 1 ? 'møde' : 'møder'}</div>
+                    <div className="mt-3">
+                      <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-700 ${
+                          index === 0 
+                            ? 'bg-gradient-to-r from-indigo-400/80 to-violet-300/90 shadow-[0_0_12px_rgba(167,139,250,0.4)]' 
+                            : 'bg-gradient-to-r from-indigo-500/60 to-indigo-400/70 shadow-[0_0_8px_rgba(99,102,241,0.3)]'
+                        }`}
+                          style={{ width: `${Math.min((person.meetings / MEETINGS_GOAL) * 100, 100)}%` }} />
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-700 ${
-                        index === 0 
-                          ? 'bg-gradient-to-r from-indigo-400/80 to-violet-300/90 shadow-[0_0_12px_rgba(167,139,250,0.4)]' 
-                          : 'bg-gradient-to-r from-indigo-500/60 to-indigo-400/70 shadow-[0_0_8px_rgba(99,102,241,0.3)]'
-                      }`}
-                        style={{ width: `${(person.meetings / maxMeetings) * 100}%` }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
