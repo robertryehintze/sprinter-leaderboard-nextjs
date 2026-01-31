@@ -3,11 +3,26 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+interface MeetingMatch {
+  rowIndex: number;
+  date: string;
+  customer: string;
+  matchScore: number;
+  converted: boolean;
+}
+
 export default function InputPage() {
   const [loading, setLoading] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  
+  // Meeting matching state
+  const [meetingMatches, setMeetingMatches] = useState<MeetingMatch[]>([]);
+  const [selectedMeeting, setSelectedMeeting] = useState<MeetingMatch | null>(null);
+  const [showMeetingPrompt, setShowMeetingPrompt] = useState(false);
+  const [checkingMeetings, setCheckingMeetings] = useState(false);
   
   const [saelger, setSaelger] = useState('');
   const [dato, setDato] = useState(new Date().toISOString().split('T')[0]);
@@ -16,7 +31,7 @@ export default function InputPage() {
   const [soerenMoede, setSoerenMoede] = useState<'JA' | 'NEJ'>('NEJ');
   const [retentionSalg, setRetentionSalg] = useState<'JA' | 'NEJ'>('NEJ');
   
-  const salespeople = ['Niels Larsen', 'Robert', 'Søgaard', 'Frank', 'Jeppe', 'Kristofer'];
+  const salespeople = ['Niels', 'Robert', 'Søgaard', 'Frank', 'Jeppe', 'Kristofer'];
   
   useEffect(() => {
     if (success) {
@@ -25,8 +40,9 @@ export default function InputPage() {
     }
   }, [success]);
   
+  // Lookup order in Webmerc
   useEffect(() => {
-    if (!ordreId.trim()) { setLookupMsg(null); return; }
+    if (!ordreId.trim()) { setLookupMsg(null); setCustomerName(''); return; }
     const t = setTimeout(async () => {
       setLookingUp(true);
       try {
@@ -34,15 +50,49 @@ export default function InputPage() {
         const data = await res.json();
         if (data.found && data.order) {
           setDb(data.order.db.toString());
+          setCustomerName(data.order.customer || '');
           setLookupMsg(`✅ Fundet: ${data.order.customer} - DB: ${data.order.db} kr`);
         } else {
           setLookupMsg(data.message || '⚠️ Ikke fundet');
+          setCustomerName('');
         }
-      } catch { setLookupMsg('⚠️ Fejl ved opslag'); }
+      } catch { setLookupMsg('⚠️ Fejl ved opslag'); setCustomerName(''); }
       finally { setLookingUp(false); }
     }, 1000);
     return () => clearTimeout(t);
   }, [ordreId]);
+  
+  // Check for meeting matches when we have customer name and salesperson
+  useEffect(() => {
+    if (!customerName || !saelger || soerenMoede === 'JA') {
+      setMeetingMatches([]);
+      setShowMeetingPrompt(false);
+      return;
+    }
+    
+    const checkMeetings = async () => {
+      setCheckingMeetings(true);
+      try {
+        const res = await fetch(`/api/meetings/match?salesperson=${encodeURIComponent(saelger)}&customer=${encodeURIComponent(customerName)}`);
+        const data = await res.json();
+        if (data.success && data.matches && data.matches.length > 0) {
+          setMeetingMatches(data.matches);
+          setShowMeetingPrompt(true);
+        } else {
+          setMeetingMatches([]);
+          setShowMeetingPrompt(false);
+        }
+      } catch (err) {
+        console.error('Meeting check error:', err);
+        setMeetingMatches([]);
+      } finally {
+        setCheckingMeetings(false);
+      }
+    };
+    
+    const t = setTimeout(checkMeetings, 500);
+    return () => clearTimeout(t);
+  }, [customerName, saelger, soerenMoede]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,23 +107,52 @@ export default function InputPage() {
     
     setLoading(true);
     try {
+      // Submit the sale
       const res = await fetch('/api/sheets/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           dato, saelger,
           ordreId: isMeeting ? 'MØDE' : ordreId.trim(),
+          kunde: customerName,
           db: isMeeting ? 0 : dbNum,
           soerenMoede, retentionSalg
         }),
       });
       const data = await res.json();
+      
       if (data.success) {
+        // If a meeting was selected, link it to this sale
+        if (selectedMeeting && ordreId.trim()) {
+          try {
+            await fetch('/api/meetings/link', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                meetingRowIndex: selectedMeeting.rowIndex,
+                orderId: ordreId.trim(),
+              }),
+            });
+          } catch (err) {
+            console.error('Failed to link meeting:', err);
+          }
+        }
+        
         setSuccess(true);
-        setOrdreId(''); setDb(''); setSoerenMoede('NEJ'); setRetentionSalg('NEJ'); setLookupMsg(null);
-      } else { alert('Fejl: ' + (data.message || 'Ukendt')); }
+        setOrdreId(''); setDb(''); setSoerenMoede('NEJ'); setRetentionSalg('NEJ'); 
+        setLookupMsg(null); setCustomerName(''); setMeetingMatches([]); 
+        setSelectedMeeting(null); setShowMeetingPrompt(false);
+      } else { 
+        alert('Fejl: ' + (data.message || 'Ukendt')); 
+      }
     } catch { alert('Fejl ved indsendelse'); }
     finally { setLoading(false); }
+  };
+  
+  const formatMatchScore = (score: number) => {
+    if (score >= 0.8) return '🎯 Meget sandsynligt';
+    if (score >= 0.5) return '✓ Sandsynligt';
+    return '? Muligt';
   };
   
   return (
@@ -108,9 +187,74 @@ export default function InputPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Ordre ID {soerenMoede === 'JA' ? '(valgfrit)' : '*'}</label>
             <input type="text" value={ordreId} onChange={(e) => setOrdreId(e.target.value)} placeholder="Ordre nummer..."
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary" required={soerenMoede === 'NEJ'} />
-            {lookingUp && <p className="mt-2 text-sm text-gray-500">🔍 Søger...</p>}
+            {lookingUp && <p className="mt-2 text-sm text-gray-500">🔍 Søger i Webmerc...</p>}
             {lookupMsg && <p className="mt-2 text-sm">{lookupMsg}</p>}
           </div>
+          
+          {/* Meeting Match Prompt */}
+          {showMeetingPrompt && meetingMatches.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">📅</span>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-blue-900 mb-2">
+                    Kom dette salg fra et tidligere møde?
+                  </h3>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Vi fandt {meetingMatches.length} møde{meetingMatches.length > 1 ? 'r' : ''} der matcher denne kunde:
+                  </p>
+                  <div className="space-y-2">
+                    {meetingMatches.slice(0, 3).map((match) => (
+                      <button
+                        key={match.rowIndex}
+                        type="button"
+                        onClick={() => setSelectedMeeting(selectedMeeting?.rowIndex === match.rowIndex ? null : match)}
+                        className={`w-full text-left p-3 rounded-lg border transition-all ${
+                          selectedMeeting?.rowIndex === match.rowIndex
+                            ? 'bg-blue-500 text-white border-blue-600'
+                            : 'bg-white border-gray-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className={`font-medium ${selectedMeeting?.rowIndex === match.rowIndex ? 'text-white' : 'text-gray-900'}`}>
+                              {match.customer}
+                            </div>
+                            <div className={`text-sm ${selectedMeeting?.rowIndex === match.rowIndex ? 'text-blue-100' : 'text-gray-500'}`}>
+                              Møde d. {match.date}
+                            </div>
+                          </div>
+                          <div className={`text-xs px-2 py-1 rounded ${
+                            selectedMeeting?.rowIndex === match.rowIndex 
+                              ? 'bg-blue-400 text-white' 
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {formatMatchScore(match.matchScore)}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedMeeting && (
+                    <p className="mt-3 text-sm text-green-600 font-medium">
+                      ✓ Møde valgt - vil blive koblet til dette salg
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setShowMeetingPrompt(false); setSelectedMeeting(null); }}
+                    className="mt-3 text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Nej, dette salg kom ikke fra et møde
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {checkingMeetings && (
+            <p className="text-sm text-gray-500">🔍 Tjekker for matchende møder...</p>
+          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">DB (Fortjeneste) *</label>
@@ -144,7 +288,11 @@ export default function InputPage() {
           </div>
           
           <div className="flex gap-4 pt-4">
-            <button type="button" onClick={() => { setOrdreId(''); setDb(''); setSoerenMoede('NEJ'); setRetentionSalg('NEJ'); setLookupMsg(null); }}
+            <button type="button" onClick={() => { 
+              setOrdreId(''); setDb(''); setSoerenMoede('NEJ'); setRetentionSalg('NEJ'); 
+              setLookupMsg(null); setCustomerName(''); setMeetingMatches([]);
+              setSelectedMeeting(null); setShowMeetingPrompt(false);
+            }}
               className="flex-1 px-6 py-4 bg-gray-100 rounded-lg font-semibold hover:bg-gray-200">Ryd</button>
             <button type="submit" disabled={loading}
               className="flex-1 px-6 py-4 bg-primary text-white rounded-lg font-semibold hover:opacity-90 disabled:opacity-50">
