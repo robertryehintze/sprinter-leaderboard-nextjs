@@ -133,7 +133,7 @@ export default function TVDashboard() {
                 </div>
                 <div className="mt-2">
                   <div className="h-3 bg-blue-950/60 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]"
+                    <div className={`h-full ${index === 0 ? 'bg-blue-300 shadow-[0_0_10px_rgba(147,197,253,0.7)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]'}`}
                       style={{ width: `${(person.meetings / maxMeetings) * 100}%` }} />
                   </div>
                 </div>
