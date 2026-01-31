@@ -72,20 +72,122 @@ const FireIcon = ({ animate }: { animate: boolean }) => (
   <span className={`inline-block ${animate ? 'animate-fire' : ''}`}>🔥</span>
 );
 
-// Punching Man Component - appears when someone is under budget
-// Shows continuously with punching animation for underperformers
-const PunchingMan = ({ show }: { show: boolean }) => {
-  if (!show) return null;
+// Punching Man Component - appears intermittently when someone is under budget
+// Slides in, punches for a few seconds, then slides out
+const PunchingMan = ({ show, personName }: { show: boolean; personName: string }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [phase, setPhase] = useState<'hidden' | 'entering' | 'punching' | 'leaving'>('hidden');
   
-  // Always show with punching animation when show is true
+  useEffect(() => {
+    if (!show) {
+      setIsVisible(false);
+      setPhase('hidden');
+      return;
+    }
+    
+    // Random interval between 15-25 seconds for each appearance
+    const scheduleNextAppearance = () => {
+      const delay = 15000 + Math.random() * 10000; // 15-25 seconds
+      return setTimeout(() => {
+        if (show) {
+          // Start the animation sequence
+          setIsVisible(true);
+          setPhase('entering');
+          
+          // After entering (1s), start punching
+          setTimeout(() => setPhase('punching'), 1000);
+          
+          // After punching for 4 seconds, start leaving
+          setTimeout(() => setPhase('leaving'), 5000);
+          
+          // After leaving (1s), hide and schedule next
+          setTimeout(() => {
+            setPhase('hidden');
+            setIsVisible(false);
+          }, 6000);
+        }
+      }, delay);
+    };
+    
+    // Initial appearance after a short delay
+    const initialTimer = setTimeout(() => {
+      if (show) {
+        setIsVisible(true);
+        setPhase('entering');
+        setTimeout(() => setPhase('punching'), 1000);
+        setTimeout(() => setPhase('leaving'), 5000);
+        setTimeout(() => {
+          setPhase('hidden');
+          setIsVisible(false);
+        }, 6000);
+      }
+    }, 2000 + Math.random() * 3000); // Initial delay 2-5 seconds
+    
+    // Set up recurring appearances
+    let recurringTimer: NodeJS.Timeout;
+    const setupRecurring = () => {
+      recurringTimer = scheduleNextAppearance();
+    };
+    
+    // Start recurring after initial animation completes
+    const recurringStartTimer = setTimeout(setupRecurring, 8000);
+    
+    // Set up interval to keep scheduling
+    const intervalId = setInterval(() => {
+      if (show && phase === 'hidden') {
+        clearTimeout(recurringTimer);
+        recurringTimer = scheduleNextAppearance();
+      }
+    }, 20000);
+    
+    return () => {
+      clearTimeout(initialTimer);
+      clearTimeout(recurringTimer);
+      clearTimeout(recurringStartTimer);
+      clearInterval(intervalId);
+    };
+  }, [show, personName]);
+  
+  if (!isVisible) return null;
+  
+  const getTransform = () => {
+    switch (phase) {
+      case 'entering':
+        return 'translateX(-50px) translateY(-50%)';
+      case 'punching':
+        return 'translateX(0) translateY(-50%)';
+      case 'leaving':
+        return 'translateX(-50px) translateY(-50%)';
+      default:
+        return 'translateX(-50px) translateY(-50%)';
+    }
+  };
+  
+  const getOpacity = () => {
+    switch (phase) {
+      case 'entering':
+        return 1;
+      case 'punching':
+        return 1;
+      case 'leaving':
+        return 0;
+      default:
+        return 0;
+    }
+  };
+  
   return (
     <div 
-      className="absolute left-0 top-1/2 -translate-y-1/2 z-20 opacity-100"
-      style={{ left: '120px' }}
+      className="absolute left-0 top-1/2 z-20 transition-all duration-1000 ease-in-out"
+      style={{ 
+        left: '120px',
+        transform: getTransform(),
+        opacity: getOpacity(),
+      }}
     >
       <div className="text-2xl md:text-3xl flex items-center">
-        <span className="animate-fist-pump">👊</span>
-        <span className="animate-head-shake">👴🏻</span>
+        <span className={phase === 'punching' ? 'animate-fist-pump' : ''}>👊</span>
+        <span className={phase === 'punching' ? 'animate-head-shake' : ''}>👴🏻</span>
       </div>
     </div>
   );
@@ -577,7 +679,7 @@ export default function TVDashboard() {
                     className={`p-3 md:p-4 rounded-xl md:rounded-2xl relative overflow-visible ${getCardStyle(index)}`}
                   >
                     {/* Punching man for those behind on workday budget (not top 3) */}
-                    <PunchingMan show={isUnderWorkdayBudget && index > 2} />
+                    <PunchingMan show={isUnderWorkdayBudget && index > 2} personName={person.name} />
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 md:gap-4 flex-1">
