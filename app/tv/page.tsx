@@ -65,12 +65,12 @@ const PunchingMan = ({ show }: { show: boolean }) => {
     if (show && phase === 'hidden') {
       // Start slide in after delay
       const timer1 = setTimeout(() => setPhase('sliding-in'), 500);
-      // Start punching after slide in completes
-      const timer2 = setTimeout(() => setPhase('punching'), 1300);
-      // Start slide out after punching
-      const timer3 = setTimeout(() => setPhase('sliding-out'), 3000);
-      // Hide completely
-      const timer4 = setTimeout(() => setPhase('hidden'), 3800);
+      // Start punching after slide in completes (longer slide in)
+      const timer2 = setTimeout(() => setPhase('punching'), 1500);
+      // Stay punching much longer (8 seconds total punching time)
+      const timer3 = setTimeout(() => setPhase('sliding-out'), 9500);
+      // Hide completely after slide out
+      const timer4 = setTimeout(() => setPhase('hidden'), 10500);
       
       return () => {
         clearTimeout(timer1);
@@ -92,10 +92,12 @@ const PunchingMan = ({ show }: { show: boolean }) => {
     }
   };
   
+  const isVisible = phase !== 'hidden';
+  
   return (
     <div className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 transition-all duration-700 ease-out ${
       getPosition()
-    } ${phase === 'hidden' ? 'opacity-0' : 'opacity-100'}`}
+    } ${isVisible ? 'opacity-100' : 'opacity-0'}`}
     style={{ left: phase === 'sliding-in' || phase === 'punching' ? '120px' : '-50px' }}
     >
       <div className="text-2xl md:text-3xl flex items-center">
