@@ -59,34 +59,48 @@ const FireIcon = ({ animate }: { animate: boolean }) => (
 
 // Punching Man Component - appears when someone is under budget
 const PunchingMan = ({ show }: { show: boolean }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isPunching, setIsPunching] = useState(false);
+  const [phase, setPhase] = useState<'hidden' | 'sliding-in' | 'punching' | 'sliding-out'>('hidden');
   
   useEffect(() => {
-    if (show) {
-      // Delay appearance slightly
-      const showTimer = setTimeout(() => {
-        setIsVisible(true);
-        // Start punching after sliding in
-        setTimeout(() => setIsPunching(true), 300);
-        // Hide after animation
-        setTimeout(() => {
-          setIsPunching(false);
-          setIsVisible(false);
-        }, 2000);
-      }, 500);
-      return () => clearTimeout(showTimer);
+    if (show && phase === 'hidden') {
+      // Start slide in after delay
+      const timer1 = setTimeout(() => setPhase('sliding-in'), 500);
+      // Start punching after slide in completes
+      const timer2 = setTimeout(() => setPhase('punching'), 1300);
+      // Start slide out after punching
+      const timer3 = setTimeout(() => setPhase('sliding-out'), 3000);
+      // Hide completely
+      const timer4 = setTimeout(() => setPhase('hidden'), 3800);
+      
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
+        clearTimeout(timer4);
+      };
     }
-  }, [show]);
+  }, [show, phase]);
   
-  if (!isVisible) return null;
+  if (phase === 'hidden') return null;
+  
+  const getPosition = () => {
+    switch (phase) {
+      case 'sliding-in': return 'translate-x-0';
+      case 'punching': return 'translate-x-0';
+      case 'sliding-out': return '-translate-x-full';
+      default: return '-translate-x-full';
+    }
+  };
   
   return (
-    <div className={`absolute -left-2 top-1/2 -translate-y-1/2 z-20 transition-all duration-300 ${
-      isVisible ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
-    }`}>
-      <div className={`text-2xl md:text-3xl ${isPunching ? 'animate-punch' : ''}`}>
-        👊👴🏻
+    <div className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 transition-all duration-700 ease-out ${
+      getPosition()
+    } ${phase === 'hidden' ? 'opacity-0' : 'opacity-100'}`}
+    style={{ left: phase === 'sliding-in' || phase === 'punching' ? '120px' : '-50px' }}
+    >
+      <div className="text-2xl md:text-3xl flex items-center">
+        <span className={phase === 'punching' ? 'animate-fist-pump' : ''}>👊</span>
+        <span className={phase === 'punching' ? 'animate-head-shake' : ''}>👴🏻</span>
       </div>
     </div>
   );
@@ -624,19 +638,24 @@ export default function TVDashboard() {
         }
         .animate-fire { animation: fire-flicker 0.5s ease-in-out infinite; }
         
-        /* Punch Animation - face emoji goes just past the name */
-        @keyframes punch {
-          0% { transform: translateX(0) rotate(0deg); }
-          15% { transform: translateX(30px) rotate(-15deg); }
-          30% { transform: translateX(80px) rotate(5deg) scale(1.1); }
-          45% { transform: translateX(130px) rotate(-5deg) scale(1.2); }
-          50% { transform: translateX(160px) rotate(0deg) scale(1.3); }
-          55% { transform: translateX(130px) rotate(5deg) scale(1.2); }
-          70% { transform: translateX(80px) rotate(-5deg) scale(1.1); }
-          85% { transform: translateX(30px) rotate(10deg); }
-          100% { transform: translateX(0) rotate(0deg); }
+        /* Fist Pump Animation - punches in place */
+        @keyframes fist-pump {
+          0%, 100% { transform: translateX(0) rotate(0deg) scale(1); }
+          25% { transform: translateX(15px) rotate(-20deg) scale(1.3); }
+          50% { transform: translateX(0) rotate(0deg) scale(1); }
+          75% { transform: translateX(15px) rotate(-20deg) scale(1.3); }
         }
-        .animate-punch { animation: punch 1.5s ease-in-out infinite; }
+        .animate-fist-pump { animation: fist-pump 0.6s ease-in-out infinite; }
+        
+        /* Head Shake Animation - angry boss shaking head */
+        @keyframes head-shake {
+          0%, 100% { transform: rotate(0deg); }
+          20% { transform: rotate(-8deg); }
+          40% { transform: rotate(8deg); }
+          60% { transform: rotate(-8deg); }
+          80% { transform: rotate(8deg); }
+        }
+        .animate-head-shake { animation: head-shake 0.5s ease-in-out infinite; }
         
         /* Bounce In Animation */
         @keyframes bounce-in {
