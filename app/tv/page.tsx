@@ -115,29 +115,156 @@ const RankIndicator = ({ change }: { change: number }) => {
   return <span className="text-red-400 text-xs ml-1 animate-bounce-in">↓{Math.abs(change)}</span>;
 };
 
-// Live Activity Feed Component
-const ActivityFeed = ({ activities }: { activities: { name: string; amount: number; time: string }[] }) => {
+// Wolf of Wall Street / Trump style motivational messages
+const generateMotivationalMessage = (data: DashboardData | null, recentSale?: { name: string; amount: number }) => {
+  if (!data) return null;
+  
+  const TEAM_GOAL = 600000;
+  const teamProgress = (data.totalDb / TEAM_GOAL) * 100;
+  const topPerformer = data.leaderboard[0];
+  const bottomPerformer = data.leaderboard[data.leaderboard.length - 1];
+  
+  // Messages based on team progress
+  const teamMessages = {
+    crushing: [ // > 80%
+      "🚀 VI ER UNSTOPPABLE! Pengene VÆLTER ind som en tsunami af SUCCESS!",
+      "💰 DETTE er hvad VINDERE gør! Wall Street ville være MISUNDELIGE!",
+      "🔥 PHENOMENALT! Vi er ikke bare gode - vi er LEGENDARISKE!",
+      "👑 Konkurrenterne GRÆDER sig i søvn! VI DOMINERER!",
+    ],
+    strong: [ // 50-80%
+      "📈 MOMENTUM er på vores side! Keep pushing, CHAMPIONS!",
+      "💪 Halvvejs der - men vi stopper IKKE før vi har VUNDET!",
+      "🎯 Solid indsats! Men husk: GOOD er fjenden af GREAT!",
+      "⚡ Vi er i ZONEN! Lad os SMADRE det sidste stykke!",
+    ],
+    needsWork: [ // 25-50%
+      "⏰ Tick tock! Tiden løber - men VINDERE finder ALTID en vej!",
+      "🔔 Wake up call! Det er tid til at ACCELERERE!",
+      "💼 Mindre snak, MERE salg! Telefonerne skal GLØDE!",
+      "🎪 Showtime, folkens! Lad os vise hvad vi er lavet af!",
+    ],
+    critical: [ // < 25%
+      "🚨 KODE RØD! Det er nu eller ALDRIG! RING RING RING!",
+      "😤 Er I her for at VINDE eller bare for at DELTAGE?!",
+      "🔥 Sæt ild til telefonerne! Hver samtale er en MULIGHED!",
+      "💀 Failure is NOT an option! Get those deals CLOSED!",
+    ],
+  };
+  
+  // Individual performance messages
+  const getIndividualMessage = (sale: { name: string; amount: number }) => {
+    const person = data.leaderboard.find(p => p.name === sale.name);
+    const progress = person?.goalProgress || 0;
+    
+    if (sale.amount >= 10000) {
+      return [
+        `🎰 ${sale.name} SMADRER det med ${sale.amount.toLocaleString('da-DK')} kr! TREMENDOUS!`,
+        `💎 ${sale.name} closer som en BOSS! ${sale.amount.toLocaleString('da-DK')} kr i kassen!`,
+        `🏆 ${sale.name} viser HVORDAN det gøres! ${sale.amount.toLocaleString('da-DK')} kr - BEAUTIFUL!`,
+      ];
+    } else if (sale.amount >= 5000) {
+      return [
+        `✨ ${sale.name} tilføjede netop ${sale.amount.toLocaleString('da-DK')} kr - Keep it coming!`,
+        `📊 ${sale.name} bygger momentum! ${sale.amount.toLocaleString('da-DK')} kr mere i potten!`,
+        `🎯 ${sale.name} rammer plet igen! ${sale.amount.toLocaleString('da-DK')} kr!`,
+      ];
+    } else {
+      return [
+        `💵 ${sale.name} scorer ${sale.amount.toLocaleString('da-DK')} kr - Every deal counts!`,
+        `📈 ${sale.name} holder dampen oppe med ${sale.amount.toLocaleString('da-DK')} kr`,
+        `✅ ${sale.name} closer: ${sale.amount.toLocaleString('da-DK')} kr i bogen!`,
+      ];
+    }
+  };
+  
+  // Select appropriate message category
+  let messagePool: string[];
+  if (recentSale) {
+    messagePool = getIndividualMessage(recentSale);
+  } else if (teamProgress >= 80) {
+    messagePool = teamMessages.crushing;
+  } else if (teamProgress >= 50) {
+    messagePool = teamMessages.strong;
+  } else if (teamProgress >= 25) {
+    messagePool = teamMessages.needsWork;
+  } else {
+    messagePool = teamMessages.critical;
+  }
+  
+  return messagePool[Math.floor(Math.random() * messagePool.length)];
+};
+
+// Live Activity Feed Component with real data and motivational messages
+const ActivityFeed = ({ 
+  activities, 
+  data 
+}: { 
+  activities: { name: string; amount: number; time: string }[]; 
+  data: DashboardData | null;
+}) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showMotivational, setShowMotivational] = useState(false);
+  const [motivationalMessage, setMotivationalMessage] = useState<string | null>(null);
   
   useEffect(() => {
     if (activities.length === 0) return;
+    
+    // Alternate between sales and motivational messages
     const interval = setInterval(() => {
-      setCurrentIndex(prev => (prev + 1) % activities.length);
-    }, 4000);
+      if (showMotivational) {
+        // Switch back to sales
+        setShowMotivational(false);
+        setCurrentIndex(prev => (prev + 1) % activities.length);
+      } else {
+        // 30% chance to show motivational message instead of next sale
+        if (Math.random() < 0.3) {
+          const msg = generateMotivationalMessage(data);
+          if (msg) {
+            setMotivationalMessage(msg);
+            setShowMotivational(true);
+          } else {
+            setCurrentIndex(prev => (prev + 1) % activities.length);
+          }
+        } else {
+          setCurrentIndex(prev => (prev + 1) % activities.length);
+        }
+      }
+    }, 5000);
+    
     return () => clearInterval(interval);
-  }, [activities.length]);
+  }, [activities.length, showMotivational, data]);
   
-  if (activities.length === 0) return null;
+  if (activities.length === 0 && !showMotivational) return null;
   
   const current = activities[currentIndex];
+  
+  // Show motivational message
+  if (showMotivational && motivationalMessage) {
+    return (
+      <div className="fixed bottom-24 md:bottom-16 left-1/2 transform -translate-x-1/2 z-[100] backdrop-blur-xl bg-gradient-to-r from-amber-900/90 to-orange-900/90 px-4 md:px-6 py-2 md:py-3 rounded-full border border-amber-400/30 shadow-[0_0_30px_rgba(251,191,36,0.25)] animate-slide-in-up">
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-amber-400 animate-pulse text-lg">⚡</span>
+          <span className="text-white font-medium">{motivationalMessage}</span>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show sale message with dynamic text based on amount
+  const saleMessage = generateMotivationalMessage(data, current);
   
   return (
     <div className="fixed bottom-24 md:bottom-16 left-1/2 transform -translate-x-1/2 z-[100] backdrop-blur-xl bg-slate-900/90 px-4 md:px-6 py-2 md:py-3 rounded-full border border-white/20 shadow-[0_0_30px_rgba(255,255,255,0.15)] animate-slide-in-up">
       <div className="flex items-center gap-3 text-sm">
         <span className="text-emerald-400 animate-pulse">●</span>
-        <span className="text-white/80">
-          <span className="font-semibold text-white">{current.name}</span> lukkede netop{' '}
-          <span className="text-teal-300 font-semibold">{current.amount.toLocaleString('da-DK')} kr</span>
+        <span className="text-white/90">
+          {saleMessage || (
+            <>
+              <span className="font-semibold text-white">{current.name}</span> lukkede netop{' '}
+              <span className="text-teal-300 font-semibold">{current.amount.toLocaleString('da-DK')} kr</span>
+            </>
+          )}
         </span>
         <span className="text-white/30 text-xs">{current.time}</span>
       </div>
@@ -266,22 +393,25 @@ export default function TVDashboard() {
   const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
   const [rankChanges, setRankChanges] = useState<Record<string, number>>({});
   
-  // Mock recent sales for activity feed (in real app, this would come from API)
-  const [recentSales] = useState([
-    { name: 'Niels', amount: 12034, time: '14:32' },
-    { name: 'Robert', amount: 3500, time: '13:45' },
-    { name: 'Frank', amount: 8200, time: '12:20' },
-  ]);
+  // Real recent sales from API
+  const [recentSales, setRecentSales] = useState<{ name: string; amount: number; time: string }[]>([]);
   
   const fetchData = useCallback(async () => {
     try {
-      const [dashboardRes, hofRes] = await Promise.all([
+      const [dashboardRes, hofRes, recentSalesRes] = await Promise.all([
         fetch('/api/dashboard?timePeriod=monthly'),
-        fetch('/api/hall-of-fame')
+        fetch('/api/hall-of-fame'),
+        fetch('/api/recent-sales?limit=15')
       ]);
       
       const dashboardData = await dashboardRes.json();
       const hofData = await hofRes.json();
+      const recentSalesData = await recentSalesRes.json();
+      
+      // Update recent sales if we got valid data
+      if (Array.isArray(recentSalesData) && recentSalesData.length > 0) {
+        setRecentSales(recentSalesData);
+      }
       
       // Calculate rank changes
       if (data?.leaderboard) {
@@ -590,7 +720,7 @@ export default function TVDashboard() {
       </div>
       
       {/* Live Activity Feed */}
-      <ActivityFeed activities={recentSales} />
+      <ActivityFeed activities={recentSales} data={data} />
       
       {/* CSS Animations */}
       <style jsx global>{`

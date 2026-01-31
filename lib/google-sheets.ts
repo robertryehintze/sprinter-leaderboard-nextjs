@@ -586,3 +586,91 @@ export async function getMeetingConversionStats(): Promise<{
     byPerson,
   };
 }
+
+
+// Fetch recent sales for Activity Feed
+export async function fetchRecentSales(limit: number = 10) {
+  const sheets = await getAuthenticatedSheetsClient();
+  
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: 'SALG (INPUT) v2!A2:N1000',
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  
+  const rows = response.data.values || [];
+  
+  // Get current month's start date for filtering
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  // Collect all sales with their dates
+  const sales: { name: string; amount: number; date: Date; time: string }[] = [];
+  
+  rows.forEach((row, index) => {
+    const dateValue = row[0];
+    const seller = row[1];
+    const dbValue = row[10];
+    const meeting = row[12];
+    
+    // Skip meeting-only entries (they have no DB value or DB is 0)
+    if (meeting === 'JA') {
+      let db = 0;
+      if (typeof dbValue === 'number') {
+        db = dbValue;
+      } else if (typeof dbValue === 'string') {
+        const cleanValue = dbValue.replace(/kr\s*/i, '').replace(/\./g, '').replace(',', '.');
+        db = parseFloat(cleanValue) || 0;
+      }
+      if (db === 0) return; // Skip pure meeting entries
+    }
+    
+    let rowDate: Date;
+    if (typeof dateValue === 'number') {
+      rowDate = new Date((dateValue - 25569) * 86400 * 1000);
+    } else if (typeof dateValue === 'string') {
+      const parts = dateValue.split('-');
+      if (parts.length === 3) {
+        rowDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      } else return;
+    } else return;
+    
+    // Only include current month's sales
+    if (rowDate < startOfMonth) return;
+    
+    const matchedSeller = matchSalesperson(seller);
+    if (!matchedSeller) return;
+    
+    let db = 0;
+    if (typeof dbValue === 'number') {
+      db = dbValue;
+    } else if (typeof dbValue === 'string') {
+      const cleanValue = dbValue.replace(/kr\s*/i, '').replace(/\./g, '').replace(',', '.');
+      db = parseFloat(cleanValue) || 0;
+    }
+    
+    if (db > 0) {
+      // Generate a pseudo-random time based on row index for variety
+      // In a real system, you'd have actual timestamps
+      const hours = 8 + (index % 10); // 8:00 - 17:00
+      const minutes = (index * 7) % 60;
+      const time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      
+      sales.push({
+        name: matchedSeller,
+        amount: db,
+        date: rowDate,
+        time,
+      });
+    }
+  });
+  
+  // Sort by date descending (most recent first) and take the limit
+  sales.sort((a, b) => b.date.getTime() - a.date.getTime());
+  
+  return sales.slice(0, limit).map(sale => ({
+    name: sale.name,
+    amount: sale.amount,
+    time: sale.time,
+  }));
+}
