@@ -479,7 +479,7 @@ export default function TVDashboard() {
                         </div>
                         {!isOverGoal && (
                           <div className="text-[10px] md:text-xs text-white/30 font-medium">
-                            mangler <AnimatedNumber value={missingAmount} suffix=" kr" />
+                            Mangler <AnimatedNumber value={missingAmount} suffix=" kr" />
                           </div>
                         )}
                       </div>
