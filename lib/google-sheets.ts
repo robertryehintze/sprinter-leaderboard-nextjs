@@ -48,7 +48,7 @@ export async function appendSaleToSheet(rowData: any[]) {
   
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: 'SALG (INPUT) v2!A:N',
+    range: 'SALG (INPUT) v2!A:A',
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [rowData] },
   });
