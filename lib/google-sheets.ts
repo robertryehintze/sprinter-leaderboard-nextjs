@@ -270,8 +270,16 @@ export async function appendSyncedOrder(orderData: {
   const sheets = await getAuthenticatedSheetsClient();
   
   // Format date as DD-MM-YYYY
+  // Webmerc returns date as "DD.MM.YYYY" - convert to "DD-MM-YYYY"
   const today = new Date();
-  const formattedDate = orderData.date || `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+  let formattedDate: string;
+  
+  if (orderData.date) {
+    // Convert DD.MM.YYYY to DD-MM-YYYY
+    formattedDate = orderData.date.replace(/\./g, '-');
+  } else {
+    formattedDate = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+  }
   
   // Format DB as Danish currency
   const formattedDb = `kr ${orderData.db.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
