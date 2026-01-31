@@ -636,7 +636,7 @@ export default function TVDashboard() {
           85% { transform: translateX(30px) rotate(10deg); }
           100% { transform: translateX(0) rotate(0deg); }
         }
-        .animate-punch { animation: punch 0.8s ease-in-out infinite; }
+        .animate-punch { animation: punch 1.5s ease-in-out infinite; }
         
         /* Bounce In Animation */
         @keyframes bounce-in {
