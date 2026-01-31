@@ -234,3 +234,73 @@ export async function fetchHallOfFame() {
   
   return hallOfFame;
 }
+
+
+// Get all existing order IDs from the sheet (for duplicate checking)
+export async function getExistingOrderIds(): Promise<Set<string>> {
+  const sheets = await getAuthenticatedSheetsClient();
+  
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: 'SALG (INPUT) v2!C2:C1000', // Column C contains order IDs
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  
+  const rows = response.data.values || [];
+  const orderIds = new Set<string>();
+  
+  rows.forEach((row) => {
+    const orderId = row[0];
+    if (orderId) {
+      orderIds.add(String(orderId).trim());
+    }
+  });
+  
+  return orderIds;
+}
+
+// Add a synced order to the sheet (auto-sync version)
+export async function appendSyncedOrder(orderData: {
+  orderId: string;
+  customer: string;
+  db: number;
+  salesrep: string;
+  date: string;
+}) {
+  const sheets = await getAuthenticatedSheetsClient();
+  
+  // Format date as DD-MM-YYYY
+  const today = new Date();
+  const formattedDate = orderData.date || `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+  
+  // Format DB as Danish currency
+  const formattedDb = `kr ${orderData.db.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  
+  // Build row data matching the sheet structure:
+  // A: Date, B: Seller, C: Order ID, D: Customer, E-J: empty, K: DB, L: empty, M: Meeting, N: Retention
+  const rowData = [
+    formattedDate,           // A: Date
+    orderData.salesrep,      // B: Seller
+    orderData.orderId,       // C: Order ID
+    orderData.customer,      // D: Customer
+    '',                      // E: empty
+    '',                      // F: empty
+    '',                      // G: empty
+    '',                      // H: empty
+    '',                      // I: empty
+    '',                      // J: empty
+    formattedDb,             // K: DB
+    '',                      // L: empty
+    'NEJ',                   // M: Meeting (default NEJ for auto-synced)
+    'NEJ',                   // N: Retention (default NEJ for auto-synced)
+  ];
+  
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: 'SALG (INPUT) v2!A:A',
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [rowData] },
+  });
+  
+  return response.data;
+}
