@@ -134,68 +134,129 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
     throw new Error('Missing Webmerc/Browserless credentials');
   }
 
-  // Use Browserless /function API to scrape order list
-  const script = `
-    module.exports = async ({ page }) => {
-      const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
-      const site = '${site}';
-      const username = '${username}';
-      const password = '${password}';
-      
-      try {
-        // Login
-        await page.goto(WEBMERC_BASE_URL + '/admin/');
-        await page.fill('input[name="Site"]', site);
-        await page.fill('input[name="Login"]', username);
-        await page.fill('input[name="Password"]', password);
-        await page.click('input[type="image"]');
-        await page.waitForLoadState('networkidle');
+  // Use Browserless /scrape API with gotoOptions and actions
+  const scrapeConfig = {
+    url: 'https://admin.webmercs.com/admin/',
+    gotoOptions: {
+      waitUntil: 'networkidle2'
+    },
+    elements: [
+      { selector: 'body', timeout: 60000 }
+    ],
+    // Login and navigate via JavaScript injection
+    evaluate: `
+      (async () => {
+        const site = '${site}';
+        const username = '${username}';
+        const password = '${password}';
         
-        // Go to order list
-        await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp');
-        await page.waitForLoadState('networkidle');
+        // Check if we're on login page
+        const siteInput = document.querySelector('input[name="Site"]');
+        if (siteInput) {
+          // Fill login form
+          siteInput.value = site;
+          document.querySelector('input[name="Login"]').value = username;
+          document.querySelector('input[name="Password"]').value = password;
+          document.querySelector('input[type="image"]').click();
+          
+          // Wait for navigation
+          await new Promise(r => setTimeout(r, 3000));
+        }
         
-        // Extract all orders from the first page (most recent)
-        const orders = await page.evaluate(() => {
-          const rows = document.querySelectorAll('table tr');
-          const orderList = [];
+        // Navigate to order list
+        window.location.href = 'https://admin.webmercs.com/admin/listorder.asp';
+        await new Promise(r => setTimeout(r, 3000));
+        
+        // Extract orders
+        const rows = document.querySelectorAll('table tr');
+        const orders = [];
+        
+        rows.forEach((row, index) => {
+          if (index === 0) return;
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 8) return;
           
-          rows.forEach((row, index) => {
-            if (index === 0) return; // Skip header
-            
-            const cells = row.querySelectorAll('td');
-            if (cells.length < 8) return;
-            
-            const orderLink = cells[1]?.querySelector('a');
-            if (!orderLink) return;
-            
-            const orderId = orderLink.textContent?.trim() || '';
-            if (!orderId || isNaN(parseInt(orderId))) return;
-            
-            const customer = cells[2]?.textContent?.trim() || '';
-            const dbText = cells[7]?.textContent?.trim() || '0';
-            const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
-            
-            // Get date from first cell
-            const dateText = cells[0]?.textContent?.trim() || '';
-            
-            orderList.push({
-              orderId,
-              customer,
-              db,
-              date: dateText
-            });
-          });
+          const orderLink = cells[1]?.querySelector('a');
+          if (!orderLink) return;
           
-          return orderList;
+          const orderId = orderLink.textContent?.trim() || '';
+          if (!orderId || isNaN(parseInt(orderId))) return;
+          
+          const customer = cells[2]?.textContent?.trim() || '';
+          const dbText = cells[7]?.textContent?.trim() || '0';
+          const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
+          const dateText = cells[0]?.textContent?.trim() || '';
+          
+          orders.push({ orderId, customer, db, date: dateText });
         });
         
-        return { success: true, orders };
-      } catch (error) {
-        return { success: false, message: error.message, orders: [] };
-      }
-    };
-  `;
+        return JSON.stringify({ success: true, orders });
+      })()
+    `
+  };
+
+  // Actually, let's use the same /function API but with proper async/await wrapper
+  const script = `
+export default async function ({ page }) {
+  const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
+  const site = '${site}';
+  const username = '${username}';
+  const password = '${password}';
+  
+  try {
+    // Login
+    await page.goto(WEBMERC_BASE_URL + '/admin/');
+    await page.fill('input[name="Site"]', site);
+    await page.fill('input[name="Login"]', username);
+    await page.fill('input[name="Password"]', password);
+    await page.click('input[type="image"]');
+    await page.waitForLoadState('networkidle');
+    
+    // Go to order list
+    await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp');
+    await page.waitForLoadState('networkidle');
+    
+    // Extract all orders from the first page (most recent)
+    const orders = await page.evaluate(() => {
+      const rows = document.querySelectorAll('table tr');
+      const orderList = [];
+      
+      rows.forEach((row, index) => {
+        if (index === 0) return; // Skip header
+        
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 8) return;
+        
+        const orderLink = cells[1]?.querySelector('a');
+        if (!orderLink) return;
+        
+        const orderId = orderLink.textContent?.trim() || '';
+        if (!orderId || isNaN(parseInt(orderId))) return;
+        
+        const customer = cells[2]?.textContent?.trim() || '';
+        const dbText = cells[7]?.textContent?.trim() || '0';
+        const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
+        
+        // Get date from first cell
+        const dateText = cells[0]?.textContent?.trim() || '';
+        
+        orderList.push({
+          orderId,
+          customer,
+          db,
+          date: dateText
+        });
+      });
+      
+      return orderList;
+    });
+    
+    return { success: true, orders };
+  } catch (error) {
+    return { success: false, message: error.message, orders: [] };
+  }
+}
+`;
 
   const response = await fetch(`${BROWSERLESS_API}/function?token=${browserlessToken}`, {
     method: 'POST',
