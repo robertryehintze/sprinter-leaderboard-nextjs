@@ -58,13 +58,12 @@ export async function appendSaleToSheet(rowData: any[]) {
 
 // Salesperson aliases - maps various name formats to display name
 const SALESPERSON_ALIASES: Record<string, string[]> = {
-  'Niels': ['niels', 'niels larsen'],
-  'Robert': ['robert'],
+  'Niels': ['niels', 'niels larsen', 'larsen'],
+  'Robert': ['robert', 'robert hintze', 'hintze'],
   'Søgaard': ['søgaard', 'michael søgaard', 'michael'],
-  'Frank': ['frank', 'vilholt', 'vilholt-johannsen', 'fvj', 'frank vilholt', 'frank vilholt-johannsen'],
-  'Jeppe': ['jeppe'],
-  'Kristofer': ['kristofer'],
-  'Gabriel': ['gabriel'],
+  'Frank': ['frank', 'vilholdt', 'vilholdt johansen', 'frank vilholdt', 'frank vilholdt johansen', 'vilholt', 'vilholt-johannsen', 'fvj'],
+  'Jeppe': ['jeppe', 'jeppe ellebæk', 'ellebæk'],
+  'Kristofer': ['kristofer', 'kristofer kripalani', 'kripalani'],
 };
 
 // Get display names for salespeople
