@@ -79,7 +79,7 @@ export default function TVDashboard() {
                   <div className="text-4xl font-bold w-16 text-center">{getMedal(index)}</div>
                   <div>
                     <div className="text-2xl font-bold">{person.name}</div>
-                    <div className="text-sm text-gray-400">{person.meetings} møder | {person.retention.toLocaleString('da-DK')} kr retention</div>
+                    <div className="text-sm text-gray-400">{person.meetings} {person.meetings === 1 ? 'møde' : 'møder'} | {person.retention.toLocaleString('da-DK')} kr retention</div>
                   </div>
                 </div>
                 <div className="text-right mr-8">
