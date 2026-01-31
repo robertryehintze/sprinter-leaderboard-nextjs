@@ -92,12 +92,10 @@ const PunchingMan = ({ show }: { show: boolean }) => {
     }
   };
   
-  const isVisible = phase !== 'hidden';
-  
   return (
     <div className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 transition-all duration-700 ease-out ${
       getPosition()
-    } ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+    } opacity-100`}
     style={{ left: phase === 'sliding-in' || phase === 'punching' ? '120px' : '-50px' }}
     >
       <div className="text-2xl md:text-3xl flex items-center">
