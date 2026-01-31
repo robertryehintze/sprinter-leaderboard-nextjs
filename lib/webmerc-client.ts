@@ -1,4 +1,4 @@
-// Webmerc client using Browserless REST API (no playwright dependency)
+// Webmerc client using Browserless REST API (Puppeteer-based)
 
 const BROWSERLESS_API = 'https://production-sfo.browserless.io';
 
@@ -19,7 +19,7 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     throw new Error('Missing Webmerc/Browserless credentials');
   }
 
-  // Use Browserless /function API with application/javascript content type
+  // Use Browserless /function API with Puppeteer syntax
   const script = `export default async function ({ page }) {
   const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
   const orderId = '${orderId}';
@@ -29,49 +29,43 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
   
   try {
     // Login
-    await page.goto(WEBMERC_BASE_URL + '/admin/');
-    await page.fill('input[name="Site"]', site);
-    await page.fill('input[name="Login"]', username);
-    await page.fill('input[name="Password"]', password);
+    await page.goto(WEBMERC_BASE_URL + '/admin/', { waitUntil: 'networkidle0' });
+    await page.type('input[name="Site"]', site);
+    await page.type('input[name="Login"]', username);
+    await page.type('input[name="Password"]', password);
     await page.click('input[type="image"]');
-    await page.waitForLoadState('networkidle');
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
     
     // Go to order list
-    await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp');
-    await page.waitForLoadState('networkidle');
+    await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0' });
     
-    // Search for order using XPath
-    let orderRow = page.locator('xpath=//table//tr[td/a[text()="' + orderId + '"]]');
-    let isVisible = await orderRow.isVisible().catch(() => false);
-    
-    // Check pagination if not found
-    if (!isVisible) {
-      const paginationLinks = page.locator('a').filter({ hasText: /^[0-9]+-[0-9]+$/ });
-      const linkCount = await paginationLinks.count();
-      
-      for (let i = 0; i < linkCount && !isVisible; i++) {
-        const link = paginationLinks.nth(i);
-        await link.click();
-        await page.waitForLoadState('networkidle');
-        orderRow = page.locator('xpath=//table//tr[td/a[text()="' + orderId + '"]]');
-        isVisible = await orderRow.isVisible().catch(() => false);
+    // Search for order in the table
+    const orderData = await page.evaluate((targetOrderId) => {
+      const rows = document.querySelectorAll('table tr');
+      for (const row of rows) {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 8) continue;
+        
+        const orderLink = cells[1]?.querySelector('a');
+        if (!orderLink) continue;
+        
+        const rowOrderId = orderLink.textContent?.trim() || '';
+        if (rowOrderId === targetOrderId) {
+          const customer = cells[2]?.textContent?.trim() || 'Unknown';
+          const dbText = cells[7]?.textContent?.trim() || '0';
+          const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
+          return { found: true, customer, db, orderLink: orderLink.href };
+        }
       }
-    }
+      return { found: false };
+    }, orderId);
     
-    if (!isVisible) {
+    if (!orderData.found) {
       return { data: { found: false, message: 'Order not found' }, type: 'application/json' };
     }
     
-    // Extract data from row
-    const cells = await orderRow.locator('td').allTextContents();
-    const customer = cells[2]?.trim() || 'Unknown';
-    const dbText = cells[7]?.trim() || '0';
-    const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
-    
     // Get salesrep from detail page
-    const orderLink = orderRow.locator('a').first();
-    await orderLink.click();
-    await page.waitForLoadState('networkidle');
+    await page.goto(orderData.orderLink, { waitUntil: 'networkidle0' });
     
     const salesrep = await page.evaluate(() => {
       const allText = document.body.innerText;
@@ -82,7 +76,7 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     return {
       data: {
         found: true,
-        order: { orderId: '${orderId}', customer, db, salesrep }
+        order: { orderId: '${orderId}', customer: orderData.customer, db: orderData.db, salesrep }
       },
       type: 'application/json'
     };
@@ -132,7 +126,7 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
     throw new Error('Missing Webmerc/Browserless credentials');
   }
 
-  // Use Browserless /function API with application/javascript content type
+  // Use Browserless /function API with Puppeteer syntax
   const script = `export default async function ({ page }) {
   const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
   const site = '${site}';
@@ -141,16 +135,15 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
   
   try {
     // Login
-    await page.goto(WEBMERC_BASE_URL + '/admin/');
-    await page.fill('input[name="Site"]', site);
-    await page.fill('input[name="Login"]', username);
-    await page.fill('input[name="Password"]', password);
+    await page.goto(WEBMERC_BASE_URL + '/admin/', { waitUntil: 'networkidle0' });
+    await page.type('input[name="Site"]', site);
+    await page.type('input[name="Login"]', username);
+    await page.type('input[name="Password"]', password);
     await page.click('input[type="image"]');
-    await page.waitForLoadState('networkidle');
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
     
     // Go to order list
-    await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp');
-    await page.waitForLoadState('networkidle');
+    await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0' });
     
     // Extract all orders from the first page (most recent)
     const orders = await page.evaluate(() => {
@@ -187,7 +180,7 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
       return orderList;
     });
     
-    return { data: { success: true, orders }, type: 'application/json' };
+    return { data: { success: true, orders, count: orders.length }, type: 'application/json' };
   } catch (error) {
     return { data: { success: false, message: error.message, orders: [] }, type: 'application/json' };
   }
