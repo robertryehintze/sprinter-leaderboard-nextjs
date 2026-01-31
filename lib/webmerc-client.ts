@@ -19,86 +19,84 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     throw new Error('Missing Webmerc/Browserless credentials');
   }
 
-  // Use Browserless /function API to run browser automation
-  const script = `
-    module.exports = async ({ page }) => {
-      const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
-      const orderId = '${orderId}';
-      const site = '${site}';
-      const username = '${username}';
-      const password = '${password}';
+  // Use Browserless /function API with application/javascript content type
+  const script = `export default async function ({ page }) {
+  const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
+  const orderId = '${orderId}';
+  const site = '${site}';
+  const username = '${username}';
+  const password = '${password}';
+  
+  try {
+    // Login
+    await page.goto(WEBMERC_BASE_URL + '/admin/');
+    await page.fill('input[name="Site"]', site);
+    await page.fill('input[name="Login"]', username);
+    await page.fill('input[name="Password"]', password);
+    await page.click('input[type="image"]');
+    await page.waitForLoadState('networkidle');
+    
+    // Go to order list
+    await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp');
+    await page.waitForLoadState('networkidle');
+    
+    // Search for order using XPath
+    let orderRow = page.locator('xpath=//table//tr[td/a[text()="' + orderId + '"]]');
+    let isVisible = await orderRow.isVisible().catch(() => false);
+    
+    // Check pagination if not found
+    if (!isVisible) {
+      const paginationLinks = page.locator('a').filter({ hasText: /^[0-9]+-[0-9]+$/ });
+      const linkCount = await paginationLinks.count();
       
-      try {
-        // Login
-        await page.goto(WEBMERC_BASE_URL + '/admin/');
-        await page.fill('input[name="Site"]', site);
-        await page.fill('input[name="Login"]', username);
-        await page.fill('input[name="Password"]', password);
-        await page.click('input[type="image"]');
+      for (let i = 0; i < linkCount && !isVisible; i++) {
+        const link = paginationLinks.nth(i);
+        await link.click();
         await page.waitForLoadState('networkidle');
-        
-        // Go to order list
-        await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp');
-        await page.waitForLoadState('networkidle');
-        
-        // Search for order
-        let orderRow = page.locator('xpath=//table//tr[td/a[text()="' + orderId + '"]]');
-        let isVisible = await orderRow.isVisible().catch(() => false);
-        
-        // Check pagination if not found
-        if (!isVisible) {
-          const paginationLinks = page.locator('a').filter({ hasText: /^\\d+-\\d+$/ });
-          const linkCount = await paginationLinks.count();
-          
-          for (let i = 0; i < linkCount && !isVisible; i++) {
-            const link = paginationLinks.nth(i);
-            await link.click();
-            await page.waitForLoadState('networkidle');
-            orderRow = page.locator('xpath=//table//tr[td/a[text()="' + orderId + '"]]');
-            isVisible = await orderRow.isVisible().catch(() => false);
-          }
-        }
-        
-        if (!isVisible) {
-          return { found: false, message: 'Order not found' };
-        }
-        
-        // Extract data from row
-        const cells = await orderRow.locator('td').allTextContents();
-        const customer = cells[2]?.trim() || 'Unknown';
-        const dbText = cells[7]?.trim() || '0';
-        const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
-        
-        // Get salesrep from detail page
-        const orderLink = orderRow.locator('a').first();
-        await orderLink.click();
-        await page.waitForLoadState('networkidle');
-        
-        const salesrep = await page.evaluate(() => {
-          const allText = document.body.innerText;
-          const placedByMatch = allText.match(/Placed by:\\s*([^\\n]+)/);
-          return placedByMatch ? placedByMatch[1].trim() : 'Unknown';
-        });
-        
-        return {
-          found: true,
-          order: { orderId: '${orderId}', customer, db, salesrep }
-        };
-      } catch (error) {
-        return { found: false, message: error.message };
+        orderRow = page.locator('xpath=//table//tr[td/a[text()="' + orderId + '"]]');
+        isVisible = await orderRow.isVisible().catch(() => false);
       }
+    }
+    
+    if (!isVisible) {
+      return { data: { found: false, message: 'Order not found' }, type: 'application/json' };
+    }
+    
+    // Extract data from row
+    const cells = await orderRow.locator('td').allTextContents();
+    const customer = cells[2]?.trim() || 'Unknown';
+    const dbText = cells[7]?.trim() || '0';
+    const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
+    
+    // Get salesrep from detail page
+    const orderLink = orderRow.locator('a').first();
+    await orderLink.click();
+    await page.waitForLoadState('networkidle');
+    
+    const salesrep = await page.evaluate(() => {
+      const allText = document.body.innerText;
+      const placedByMatch = allText.match(/Placed by:\\s*([^\\n]+)/);
+      return placedByMatch ? placedByMatch[1].trim() : 'Unknown';
+    });
+    
+    return {
+      data: {
+        found: true,
+        order: { orderId: '${orderId}', customer, db, salesrep }
+      },
+      type: 'application/json'
     };
-  `;
+  } catch (error) {
+    return { data: { found: false, message: error.message }, type: 'application/json' };
+  }
+}`;
 
   const response = await fetch(`${BROWSERLESS_API}/function?token=${browserlessToken}`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/javascript',
     },
-    body: JSON.stringify({
-      code: script,
-      context: {},
-    }),
+    body: script,
   });
 
   if (!response.ok) {
@@ -108,8 +106,8 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
 
   const result = await response.json();
   
-  if (result.found && result.order) {
-    return result.order;
+  if (result.data?.found && result.data?.order) {
+    return result.data.order;
   }
   
   return null;
@@ -134,70 +132,8 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
     throw new Error('Missing Webmerc/Browserless credentials');
   }
 
-  // Use Browserless /scrape API with gotoOptions and actions
-  const scrapeConfig = {
-    url: 'https://admin.webmercs.com/admin/',
-    gotoOptions: {
-      waitUntil: 'networkidle2'
-    },
-    elements: [
-      { selector: 'body', timeout: 60000 }
-    ],
-    // Login and navigate via JavaScript injection
-    evaluate: `
-      (async () => {
-        const site = '${site}';
-        const username = '${username}';
-        const password = '${password}';
-        
-        // Check if we're on login page
-        const siteInput = document.querySelector('input[name="Site"]');
-        if (siteInput) {
-          // Fill login form
-          siteInput.value = site;
-          document.querySelector('input[name="Login"]').value = username;
-          document.querySelector('input[name="Password"]').value = password;
-          document.querySelector('input[type="image"]').click();
-          
-          // Wait for navigation
-          await new Promise(r => setTimeout(r, 3000));
-        }
-        
-        // Navigate to order list
-        window.location.href = 'https://admin.webmercs.com/admin/listorder.asp';
-        await new Promise(r => setTimeout(r, 3000));
-        
-        // Extract orders
-        const rows = document.querySelectorAll('table tr');
-        const orders = [];
-        
-        rows.forEach((row, index) => {
-          if (index === 0) return;
-          const cells = row.querySelectorAll('td');
-          if (cells.length < 8) return;
-          
-          const orderLink = cells[1]?.querySelector('a');
-          if (!orderLink) return;
-          
-          const orderId = orderLink.textContent?.trim() || '';
-          if (!orderId || isNaN(parseInt(orderId))) return;
-          
-          const customer = cells[2]?.textContent?.trim() || '';
-          const dbText = cells[7]?.textContent?.trim() || '0';
-          const db = parseFloat(dbText.replace(/\\s/g, '').replace(',', '.')) || 0;
-          const dateText = cells[0]?.textContent?.trim() || '';
-          
-          orders.push({ orderId, customer, db, date: dateText });
-        });
-        
-        return JSON.stringify({ success: true, orders });
-      })()
-    `
-  };
-
-  // Actually, let's use the same /function API but with proper async/await wrapper
-  const script = `
-export default async function ({ page }) {
+  // Use Browserless /function API with application/javascript content type
+  const script = `export default async function ({ page }) {
   const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
   const site = '${site}';
   const username = '${username}';
@@ -251,22 +187,18 @@ export default async function ({ page }) {
       return orderList;
     });
     
-    return { success: true, orders };
+    return { data: { success: true, orders }, type: 'application/json' };
   } catch (error) {
-    return { success: false, message: error.message, orders: [] };
+    return { data: { success: false, message: error.message, orders: [] }, type: 'application/json' };
   }
-}
-`;
+}`;
 
   const response = await fetch(`${BROWSERLESS_API}/function?token=${browserlessToken}`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/javascript',
     },
-    body: JSON.stringify({
-      code: script,
-      context: {},
-    }),
+    body: script,
   });
 
   if (!response.ok) {
@@ -276,10 +208,10 @@ export default async function ({ page }) {
 
   const result = await response.json();
   
-  if (result.success && result.orders) {
-    return result.orders;
+  if (result.data?.success && result.data?.orders) {
+    return result.data.orders;
   }
   
-  console.error('Failed to fetch orders:', result.message);
+  console.error('Failed to fetch orders:', result.data?.message);
   return [];
 }
