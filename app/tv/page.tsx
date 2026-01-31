@@ -57,6 +57,41 @@ const FireIcon = ({ animate }: { animate: boolean }) => (
   <span className={`inline-block ${animate ? 'animate-fire' : ''}`}>🔥</span>
 );
 
+// Punching Man Component - appears when someone is under budget
+const PunchingMan = ({ show }: { show: boolean }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [isPunching, setIsPunching] = useState(false);
+  
+  useEffect(() => {
+    if (show) {
+      // Delay appearance slightly
+      const showTimer = setTimeout(() => {
+        setIsVisible(true);
+        // Start punching after sliding in
+        setTimeout(() => setIsPunching(true), 300);
+        // Hide after animation
+        setTimeout(() => {
+          setIsPunching(false);
+          setIsVisible(false);
+        }, 2000);
+      }, 500);
+      return () => clearTimeout(showTimer);
+    }
+  }, [show]);
+  
+  if (!isVisible) return null;
+  
+  return (
+    <div className={`absolute -left-2 top-1/2 -translate-y-1/2 z-20 transition-all duration-300 ${
+      isVisible ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
+    }`}>
+      <div className={`text-2xl md:text-3xl ${isPunching ? 'animate-punch' : ''}`}>
+        👊😤
+      </div>
+    </div>
+  );
+};
+
 // Rank Change Indicator
 const RankIndicator = ({ change }: { change: number }) => {
   if (change === 0) return null;
@@ -397,13 +432,17 @@ export default function TVDashboard() {
                 const isOverGoal = person.db >= DB_GOAL;
                 const missingAmount = DB_GOAL - person.db;
                 const onFire = isOnFire(person.name);
+                const isUnderBudget = person.goalProgress < 50; // Under 50% of goal
                 
                 return (
                   <AnimatedCard 
                     key={person.name} 
                     index={index}
-                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl ${getCardStyle(index)}`}
+                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl relative overflow-visible ${getCardStyle(index)}`}
                   >
+                    {/* Punching man for underperformers (not top 3) */}
+                    <PunchingMan show={isUnderBudget && index > 2} />
+                    
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 md:gap-4 flex-1">
                         <div className={`text-xl md:text-3xl font-bold w-8 md:w-12 text-center ${index === 0 ? 'animate-bounce-subtle' : ''}`}>
@@ -584,6 +623,18 @@ export default function TVDashboard() {
           75% { transform: scale(1.15) rotate(3deg); }
         }
         .animate-fire { animation: fire-flicker 0.5s ease-in-out infinite; }
+        
+        /* Punch Animation */
+        @keyframes punch {
+          0% { transform: translateX(0) rotate(0deg); }
+          20% { transform: translateX(10px) rotate(-10deg); }
+          40% { transform: translateX(25px) rotate(5deg) scale(1.2); }
+          50% { transform: translateX(30px) rotate(0deg) scale(1.3); }
+          60% { transform: translateX(25px) rotate(-5deg) scale(1.2); }
+          80% { transform: translateX(10px) rotate(5deg); }
+          100% { transform: translateX(0) rotate(0deg); }
+        }
+        .animate-punch { animation: punch 0.6s ease-in-out infinite; }
         
         /* Bounce In Animation */
         @keyframes bounce-in {
