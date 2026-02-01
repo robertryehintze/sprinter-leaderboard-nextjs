@@ -31,6 +31,8 @@ export default function InputPage() {
   const [db, setDb] = useState('');
   const [soerenMoede, setSoerenMoede] = useState<'JA' | 'NEJ'>('NEJ');
   const [retentionSalg, setRetentionSalg] = useState<'JA' | 'NEJ'>('NEJ');
+  const [checkingRetention, setCheckingRetention] = useState(false);
+  const [retentionInfo, setRetentionInfo] = useState<string | null>(null);
   
   const salespeople = ['Niels', 'Robert', 'Søgaard', 'Frank', 'Jeppe', 'Kristofer'];
   
@@ -46,7 +48,7 @@ export default function InputPage() {
   
   // Lookup order in Webmerc
   useEffect(() => {
-    if (!ordreId.trim()) { setLookupMsg(null); setCustomerName(''); return; }
+    if (!ordreId.trim()) { setLookupMsg(null); setCustomerName(''); setRetentionInfo(null); return; }
     const t = setTimeout(async () => {
       setLookingUp(true);
       try {
@@ -56,11 +58,34 @@ export default function InputPage() {
           setDb(data.order.db.toString());
           setCustomerName(data.order.customer || '');
           setLookupMsg(`✅ Fundet: ${data.order.customer} - DB: ${data.order.db} kr`);
+          
+          // Auto-check retention for this customer
+          if (data.order.customer) {
+            setCheckingRetention(true);
+            setRetentionInfo('🔍 Tjekker kundehistorik...');
+            try {
+              const retentionRes = await fetch(`/api/retention?customer=${encodeURIComponent(data.order.customer)}`);
+              const retentionData = await retentionRes.json();
+              if (retentionData.isRetention) {
+                setRetentionSalg('JA');
+                setRetentionInfo(`✅ Retention! ${retentionData.message}`);
+              } else {
+                setRetentionSalg('NEJ');
+                setRetentionInfo(retentionData.message || 'Ny kunde');
+              }
+            } catch (err) {
+              console.error('Retention check failed:', err);
+              setRetentionInfo('⚠️ Kunne ikke tjekke kundehistorik');
+            } finally {
+              setCheckingRetention(false);
+            }
+          }
         } else {
           setLookupMsg(data.message || '⚠️ Ikke fundet');
           setCustomerName('');
+          setRetentionInfo(null);
         }
-      } catch { setLookupMsg('⚠️ Fejl ved opslag'); setCustomerName(''); }
+      } catch { setLookupMsg('⚠️ Fejl ved opslag'); setCustomerName(''); setRetentionInfo(null); }
       finally { setLookingUp(false); }
     }, 1000);
     return () => clearTimeout(t);
@@ -358,6 +383,17 @@ export default function InputPage() {
                   </button>
                 ))}
               </div>
+              {checkingRetention && (
+                <p className="mt-2 text-sm text-blue-500">🔍 Tjekker automatisk kundehistorik i Webmerc...</p>
+              )}
+              {retentionInfo && !checkingRetention && (
+                <p className={`mt-2 text-sm ${retentionSalg === 'JA' ? 'text-green-600' : 'text-gray-500'}`}>
+                  {retentionInfo}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-gray-400">
+                💡 Retention = gensalg til kunde inden for 24 måneder (tjekkes automatisk)
+              </p>
             </div>
           )}
           
