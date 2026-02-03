@@ -493,6 +493,84 @@ export default function TVDashboard() {
   // Real recent sales from API
   const [recentSales, setRecentSales] = useState<{ name: string; amount: number; time: string }[]>([]);
   
+  // Webmerc sync state
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [syncResult, setSyncResult] = useState<{ newOrders: number; message: string } | null>(null);
+  
+  // Webmerc sync webhook URL (Manus sandbox)
+  const SYNC_WEBHOOK_URL = 'https://3456-i6dzy4iv78mhk71d2eesj-412af637.us2.manus.computer';
+  
+  // Trigger Webmerc sync
+  const triggerSync = async () => {
+    if (syncStatus === 'syncing') return;
+    
+    setSyncStatus('syncing');
+    setSyncResult(null);
+    
+    try {
+      // Trigger sync
+      const response = await fetch(`${SYNC_WEBHOOK_URL}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Sync request failed');
+      }
+      
+      // Poll for status
+      let attempts = 0;
+      const maxAttempts = 60; // 60 seconds max
+      
+      const pollStatus = async (): Promise<void> => {
+        const statusRes = await fetch(`${SYNC_WEBHOOK_URL}/status`);
+        const status = await statusRes.json();
+        
+        if (!status.isRunning && status.lastResult) {
+          setSyncStatus(status.lastResult.success ? 'success' : 'error');
+          setSyncResult({
+            newOrders: status.lastResult.newOrdersUploaded || 0,
+            message: status.lastResult.success 
+              ? `Sync færdig! ${status.lastResult.newOrdersUploaded || 0} nye ordrer tilføjet.`
+              : 'Sync fejlede. Prøv igen senere.',
+          });
+          
+          // Refresh data if new orders were added
+          if (status.lastResult.newOrdersUploaded > 0) {
+            setTimeout(() => fetchData(), 2000);
+          }
+          
+          // Reset status after 5 seconds
+          setTimeout(() => {
+            setSyncStatus('idle');
+            setSyncResult(null);
+          }, 5000);
+          return;
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(pollStatus, 1000);
+        } else {
+          setSyncStatus('error');
+          setSyncResult({ newOrders: 0, message: 'Sync timeout. Prøv igen.' });
+        }
+      };
+      
+      // Start polling after a short delay
+      setTimeout(pollStatus, 2000);
+      
+    } catch (error) {
+      console.error('Sync error:', error);
+      setSyncStatus('error');
+      setSyncResult({ newOrders: 0, message: 'Kunne ikke starte sync. Prøv igen.' });
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncResult(null);
+      }, 5000);
+    }
+  };
+  
   const fetchData = useCallback(async () => {
     try {
       const [dashboardRes, hofRes, recentSalesRes] = await Promise.all([
@@ -638,10 +716,32 @@ export default function TVDashboard() {
               <Link href="/input" className="px-4 md:px-6 py-2 md:py-3 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 hover:scale-105 transition-all duration-300 inline-block shadow-[0_0_20px_rgba(255,255,255,0.05)] text-sm md:text-base">
                 ➕ Tilføj Salg
               </Link>
+              <button 
+                onClick={triggerSync}
+                disabled={syncStatus === 'syncing'}
+                className={`px-4 md:px-6 py-2 md:py-3 backdrop-blur-xl border rounded-xl font-semibold transition-all duration-300 inline-block text-sm md:text-base ${
+                  syncStatus === 'syncing' 
+                    ? 'bg-amber-500/20 border-amber-400/30 text-amber-300 cursor-wait animate-pulse'
+                    : syncStatus === 'success'
+                    ? 'bg-emerald-500/20 border-emerald-400/30 text-emerald-300'
+                    : syncStatus === 'error'
+                    ? 'bg-red-500/20 border-red-400/30 text-red-300'
+                    : 'bg-teal-500/10 border-teal-400/20 text-teal-300 hover:bg-teal-500/20 hover:scale-105'
+                } shadow-[0_0_20px_rgba(20,184,166,0.05)]`}
+              >
+                {syncStatus === 'syncing' ? '🔄 Syncer...' : syncStatus === 'success' ? '✅ Synced!' : syncStatus === 'error' ? '❌ Fejl' : '🔄 Sync Webmerc'}
+              </button>
               <Link href="/admin" className="px-4 md:px-6 py-2 md:py-3 bg-slate-500/10 backdrop-blur-xl border border-slate-400/20 text-slate-300 rounded-xl font-semibold hover:bg-slate-500/20 hover:scale-105 transition-all duration-300 inline-block shadow-[0_0_20px_rgba(100,116,139,0.05)] text-sm md:text-base">
                 ⚙️ Admin
               </Link>
             </div>
+            {syncResult && (
+              <div className={`text-xs md:text-sm mt-1 ${
+                syncStatus === 'success' ? 'text-emerald-400' : syncStatus === 'error' ? 'text-red-400' : 'text-amber-400'
+              }`}>
+                {syncResult.message}
+              </div>
+            )}
             <div className="text-xs md:text-sm text-white/40 mt-2">Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}</div>
           </div>
         </div>
