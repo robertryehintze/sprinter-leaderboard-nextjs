@@ -39,6 +39,63 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     // Go to order list
     await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0' });
     
+    // Enable ALL order status checkboxes to include all orders:
+    // - Under behandling (processing)
+    // - Faktura/betalt (invoiced/paid)
+    // - Bestilt (ordered)
+    // - Sendt (sent)
+    const checkboxesChanged = await page.evaluate(() => {
+      const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
+      let changed = false;
+      
+      for (const checkbox of allCheckboxes) {
+        const parent = checkbox.parentElement;
+        const nearbyText = parent?.textContent?.toLowerCase() || '';
+        const nextSibling = checkbox.nextSibling?.textContent?.toLowerCase() || '';
+        const labelText = nearbyText + ' ' + nextSibling;
+        
+        // Check for all 4 status filters
+        const isStatusCheckbox = 
+          labelText.includes('under behandling') ||
+          labelText.includes('faktura') ||
+          labelText.includes('betalt') ||
+          labelText.includes('bestilt') ||
+          labelText.includes('sendt');
+        
+        if (isStatusCheckbox && !checkbox.checked) {
+          checkbox.click();
+          changed = true;
+        }
+      }
+      
+      return changed;
+    });
+    
+    // If checkboxes were changed, submit the form to refresh the list
+    if (checkboxesChanged) {
+      const submitted = await page.evaluate(() => {
+        const buttons = document.querySelectorAll('input[type="image"], input[type="submit"], button');
+        for (const btn of buttons) {
+          const src = btn.getAttribute('src') || '';
+          const value = btn.getAttribute('value') || '';
+          if (src.includes('LookUp') || src.includes('search') || value.toLowerCase().includes('s\u00f8g')) {
+            btn.click();
+            return true;
+          }
+        }
+        const form = document.querySelector('form');
+        if (form) {
+          form.submit();
+          return true;
+        }
+        return false;
+      });
+      
+      if (submitted) {
+        await page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {});
+      }
+    }
+    
     // Search for order in the table - look for link with exact order ID text
     const orderData = await page.evaluate((targetOrderId) => {
       // Find all links that could be order IDs
@@ -159,6 +216,63 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
     
     // Go to order list
     await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0' });
+    
+    // Enable ALL order status checkboxes to include all orders:
+    // - Under behandling (processing)
+    // - Faktura/betalt (invoiced/paid)
+    // - Bestilt (ordered)
+    // - Sendt (sent)
+    const checkboxesChanged = await page.evaluate(() => {
+      const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
+      let changed = false;
+      
+      for (const checkbox of allCheckboxes) {
+        const parent = checkbox.parentElement;
+        const nearbyText = parent?.textContent?.toLowerCase() || '';
+        const nextSibling = checkbox.nextSibling?.textContent?.toLowerCase() || '';
+        const labelText = nearbyText + ' ' + nextSibling;
+        
+        // Check for all 4 status filters
+        const isStatusCheckbox = 
+          labelText.includes('under behandling') ||
+          labelText.includes('faktura') ||
+          labelText.includes('betalt') ||
+          labelText.includes('bestilt') ||
+          labelText.includes('sendt');
+        
+        if (isStatusCheckbox && !checkbox.checked) {
+          checkbox.click();
+          changed = true;
+        }
+      }
+      
+      return changed;
+    });
+    
+    // If checkboxes were changed, submit the form to refresh the list
+    if (checkboxesChanged) {
+      const submitted = await page.evaluate(() => {
+        const buttons = document.querySelectorAll('input[type="image"], input[type="submit"], button');
+        for (const btn of buttons) {
+          const src = btn.getAttribute('src') || '';
+          const value = btn.getAttribute('value') || '';
+          if (src.includes('LookUp') || src.includes('search') || value.toLowerCase().includes('s\u00f8g') || value.toLowerCase().includes('search')) {
+            btn.click();
+            return true;
+          }
+        }
+        const form = document.querySelector('form');
+        if (form) {
+          form.submit();
+          return true;
+        }
+        return false;
+      });
+      
+      if (submitted) {
+        await page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {});
+      }
+    }
     
     // Extract all orders - find rows with order ID links
     const orders = await page.evaluate(() => {
