@@ -497,10 +497,7 @@ export default function TVDashboard() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncResult, setSyncResult] = useState<{ newOrders: number; message: string } | null>(null);
   
-  // Webmerc sync webhook URL (Manus sandbox)
-  const SYNC_WEBHOOK_URL = 'https://3456-i6dzy4iv78mhk71d2eesj-412af637.us2.manus.computer';
-  
-  // Trigger Webmerc sync
+  // Trigger Webmerc sync using internal API
   const triggerSync = async () => {
     if (syncStatus === 'syncing') return;
     
@@ -508,57 +505,40 @@ export default function TVDashboard() {
     setSyncResult(null);
     
     try {
-      // Trigger sync
-      const response = await fetch(`${SYNC_WEBHOOK_URL}/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // Call the internal sync API endpoint
+      const response = await fetch('/api/sync?manual=true', {
+        method: 'GET',
       });
       
-      if (!response.ok) {
-        throw new Error('Sync request failed');
+      const result = await response.json();
+      
+      if (result.success) {
+        const syncedOrders = result.stats?.syncedOrders || 0;
+        setSyncStatus('success');
+        setSyncResult({
+          newOrders: syncedOrders,
+          message: syncedOrders > 0 
+            ? `Sync færdig! ${syncedOrders} nye ordrer tilføjet.`
+            : 'Sync færdig! Ingen nye ordrer fundet.',
+        });
+        
+        // Refresh data if new orders were added
+        if (syncedOrders > 0) {
+          setTimeout(() => fetchData(), 2000);
+        }
+      } else {
+        setSyncStatus('error');
+        setSyncResult({
+          newOrders: 0,
+          message: result.error || 'Sync fejlede. Prøv igen senere.',
+        });
       }
       
-      // Poll for status
-      let attempts = 0;
-      const maxAttempts = 60; // 60 seconds max
-      
-      const pollStatus = async (): Promise<void> => {
-        const statusRes = await fetch(`${SYNC_WEBHOOK_URL}/status`);
-        const status = await statusRes.json();
-        
-        if (!status.isRunning && status.lastResult) {
-          setSyncStatus(status.lastResult.success ? 'success' : 'error');
-          setSyncResult({
-            newOrders: status.lastResult.newOrdersUploaded || 0,
-            message: status.lastResult.success 
-              ? `Sync færdig! ${status.lastResult.newOrdersUploaded || 0} nye ordrer tilføjet.`
-              : 'Sync fejlede. Prøv igen senere.',
-          });
-          
-          // Refresh data if new orders were added
-          if (status.lastResult.newOrdersUploaded > 0) {
-            setTimeout(() => fetchData(), 2000);
-          }
-          
-          // Reset status after 5 seconds
-          setTimeout(() => {
-            setSyncStatus('idle');
-            setSyncResult(null);
-          }, 5000);
-          return;
-        }
-        
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(pollStatus, 1000);
-        } else {
-          setSyncStatus('error');
-          setSyncResult({ newOrders: 0, message: 'Sync timeout. Prøv igen.' });
-        }
-      };
-      
-      // Start polling after a short delay
-      setTimeout(pollStatus, 2000);
+      // Reset status after 5 seconds
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncResult(null);
+      }, 5000);
       
     } catch (error) {
       console.error('Sync error:', error);
