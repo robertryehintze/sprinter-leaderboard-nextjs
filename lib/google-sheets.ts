@@ -64,6 +64,7 @@ const SALESPERSON_ALIASES: Record<string, string[]> = {
   'Frank': ['frank', 'vilholdt', 'vilholdt johansen', 'frank vilholdt', 'frank vilholdt johansen', 'vilholt', 'vilholt-johannsen', 'fvj'],
   'Jeppe': ['jeppe', 'jeppe ellebæk', 'ellebæk'],
   'Kristofer': ['kristofer', 'kristofer kripalani', 'kripalani'],
+  'Søren': ['søren', 'søren nielsen', 'nielsen'],
 };
 
 // Get display names for salespeople
