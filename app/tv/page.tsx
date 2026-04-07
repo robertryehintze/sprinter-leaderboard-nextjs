@@ -57,11 +57,21 @@ interface DashboardData {
   formerSellersDb?: number;
   recentSales?: { name: string; amount: number; time: string }[];
   goals?: Record<string, number>;
-  yearlyBreakdown?: { sellers: YearlySeller[]; year: number; formerSellers?: FormerSellers };
+  yearlyBreakdown?: {
+    sellers: YearlySeller[];
+    year: number;
+    fiscalPeriod?: string;
+    fiscalMonthCount?: number;
+    teamBudget?: number;
+    formerSellers?: FormerSellers;
+  };
 }
 
 const DB_GOAL = 200000;
-const YEARLY_GOAL = 2400000;
+const TEAM_HALF_YEAR_BUDGET = 6000000;
+
+// Fiscal half-year month labels (Jan–Jun)
+const FISCAL_MONTH_LABELS = ['Jan','Feb','Mar','Apr','Maj','Jun'];
 
 // Confetti Component
 const Confetti = ({ active }: { active: boolean }) => {
@@ -147,16 +157,19 @@ const AnimatedCard = ({ children, index, className }: { children: React.ReactNod
   </div>
 );
 
-// Mini bar chart for monthly breakdown
+// Mini bar chart for monthly breakdown (fiscal half-year: 6 months Jan–Jun)
 const MiniBarChart = ({ months, monthlyGoal }: { months: number[]; monthlyGoal: number }) => {
   const now = new Date();
-  const currentMonthIdx = now.getMonth();
+  const currentMonthIdx = now.getMonth(); // 0-based, Jan=0
+  // months array is already sliced to fiscal period (6 items: Jan–Jun)
   const maxVal = Math.max(...months, monthlyGoal);
-  const labels = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const labels = ['J','F','M','A','M','J'];
   
   return (
     <div className="flex items-end gap-[2px] h-[32px]">
-      {months.slice(0, currentMonthIdx + 1).map((val, i) => {
+      {months.map((val, i) => {
+        // i maps directly to fiscal month index (0=Jan, 5=Jun)
+        const isFuture = i > currentMonthIdx;
         const height = maxVal > 0 ? (val / maxVal) * 100 : 0;
         const isCurrentMonth = i === currentMonthIdx;
         const overGoal = val >= monthlyGoal;
@@ -164,9 +177,10 @@ const MiniBarChart = ({ months, monthlyGoal }: { months: number[]; monthlyGoal: 
           <div key={i} className="flex flex-col items-center" style={{ flex: 1 }}>
             <div
               className={`w-full rounded-t-sm transition-all ${
+                isFuture ? 'bg-white/5' :
                 overGoal ? 'bg-emerald-400' : isCurrentMonth ? 'bg-teal-400' : val > 0 ? 'bg-teal-600' : 'bg-white/10'
               }`}
-              style={{ height: `${Math.max(height, 4)}%`, minHeight: '2px' }}
+              style={{ height: isFuture ? '4%' : `${Math.max(height, 4)}%`, minHeight: '2px' }}
               title={`${labels[i]}: ${val.toLocaleString('da-DK')} kr`}
             />
           </div>
@@ -182,7 +196,7 @@ const ActivityFeed = ({ activities, data }: { activities: { name: string; amount
   const [showMotivational, setShowMotivational] = useState(false);
   const [motivationalMessage, setMotivationalMessage] = useState<string | null>(null);
   
-  const TEAM_GOAL = 1000000; // 5 active sellers x 200K
+  const TEAM_GOAL = 1000000; // Monthly team goal: Niels 200K + Robert 200K + Søgaard 200K + Søren 300K + Kristofer 100K = 1M
   
   const generateMessage = useCallback(() => {
     if (!data) return null;
@@ -413,7 +427,7 @@ export default function TVDashboard() {
             </div>
           </div>
           <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-indigo-400/15">
-            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Team YTD {yearlyData?.year || 2026}</div>
+            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Team {yearlyData?.fiscalPeriod || 'H1'} {yearlyData?.year || 2026} / {(TEAM_HALF_YEAR_BUDGET / 1000000).toFixed(0)}M</div>
             <div className="text-2xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
               <AnimatedNumber value={(yearlyData?.sellers.reduce((s, v) => s + v.ytd, 0) || 0) + (yearlyData?.formerSellers?.ytd || 0)} suffix=" kr" />
             </div>
@@ -480,15 +494,17 @@ export default function TVDashboard() {
           {/* RIGHT COLUMN: Yearly Budget + Hall of Fame */}
           <div className="flex flex-col gap-3 min-h-0">
             
-            {/* Yearly Budget Section */}
+            {/* Fiscal Half-Year Budget Section */}
             <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-2xl p-4 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)] animate-slide-up-delayed flex-1 min-h-0 flex flex-col">
-              <h2 className="text-lg font-semibold mb-2 text-indigo-200/90 tracking-wide">📊 Årsbudget {yearlyData?.year || 2026}</h2>
+              <h2 className="text-lg font-semibold mb-2 text-indigo-200/90 tracking-wide">📊 Budget {yearlyData?.fiscalPeriod || 'H1'} {yearlyData?.year || 2026}</h2>
               <div className="space-y-2 overflow-hidden flex-1">
                 {(yearlyData?.sellers || []).map((seller, index) => {
                   const progressPct = Math.min(seller.yearlyProgress, 100);
                   const remaining = seller.yearlyGoal - seller.ytd;
                   const currentMonthIdx = new Date().getMonth();
-                  const expectedYtd = seller.monthlyGoal * (currentMonthIdx + 1);
+                  // Expected YTD = monthly goal * months elapsed in fiscal period (Jan=1, Feb=2, etc.)
+                  const fiscalMonthsElapsed = Math.min(currentMonthIdx + 1, 6);
+                  const expectedYtd = seller.monthlyGoal * fiscalMonthsElapsed;
                   const isAhead = seller.ytd >= expectedYtd;
                   
                   return (

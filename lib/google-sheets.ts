@@ -175,13 +175,17 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
     }
   });
   
-  const leaderboard = SALESPEOPLE.map(name => ({
-    name,
-    db: salesData[name].db,
-    meetings: salesData[name].meetings,
-    retention: salesData[name].retention,
-    goalProgress: (salesData[name].db / 200000) * 100,
-  })).sort((a, b) => b.db - a.db);
+  const leaderboard = SALESPEOPLE.map(name => {
+    const monthlyGoal = DEFAULT_GOALS[name] || 200000;
+    return {
+      name,
+      db: salesData[name].db,
+      meetings: salesData[name].meetings,
+      retention: salesData[name].retention,
+      goalProgress: (salesData[name].db / monthlyGoal) * 100,
+      monthlyGoal,
+    };
+  }).sort((a, b) => b.db - a.db);
   
   // Former sellers' total DB
   const formerDb = FORMER_SELLERS.reduce((sum, name) => sum + formerData[name].db, 0);
@@ -355,37 +359,47 @@ export async function fetchYearlyBreakdown() {
     monthlyDb[matchedSeller][monthIndex] += db;
   });
   
-  // Build result: per seller, total YTD, and monthly array
-  const YEARLY_GOAL = 2400000;
-  const MONTHLY_GOAL = 200000;
+  // Build result using fiscal half-year (Jan–Jun)
+  // Only include months within the fiscal period
+  const fiscalMonths = monthlyDb;
   
-  // Active sellers
+  // Active sellers with individual half-year budgets
   const sellers = SALESPEOPLE.map(name => {
-    const months = monthlyDb[name];
-    const ytd = months.reduce((sum, v) => sum + v, 0);
+    const allMonths = fiscalMonths[name];
+    // Only Jan–Jun for fiscal half-year
+    const halfYearMonths = allMonths.slice(FISCAL_START_MONTH, FISCAL_END_MONTH + 1);
+    const ytd = halfYearMonths.reduce((sum, v) => sum + v, 0);
+    const halfYearGoal = HALF_YEAR_BUDGETS[name] || 1200000;
+    const monthlyGoal = DEFAULT_GOALS[name] || 200000;
     return {
       name,
-      months, // array of 12 monthly DB values
+      months: halfYearMonths, // array of 6 monthly DB values (Jan–Jun)
       ytd,
-      yearlyGoal: YEARLY_GOAL,
-      yearlyProgress: (ytd / YEARLY_GOAL) * 100,
-      monthlyGoal: MONTHLY_GOAL,
+      yearlyGoal: halfYearGoal,
+      yearlyProgress: (ytd / halfYearGoal) * 100,
+      monthlyGoal,
     };
   }).sort((a, b) => b.ytd - a.ytd);
   
-  // Former sellers aggregated
-  const formerMonths = new Array(12).fill(0);
+  // Former sellers aggregated (also only Jan–Jun)
+  const formerAllMonths = new Array(12).fill(0);
   FORMER_SELLERS.forEach(name => {
-    monthlyDb[name].forEach((val, i) => { formerMonths[i] += val; });
+    if (fiscalMonths[name]) {
+      fiscalMonths[name].forEach((val, i) => { formerAllMonths[i] += val; });
+    }
   });
-  const formerYtd = formerMonths.reduce((sum, v) => sum + v, 0);
+  const formerHalfYearMonths = formerAllMonths.slice(FISCAL_START_MONTH, FISCAL_END_MONTH + 1);
+  const formerYtd = formerHalfYearMonths.reduce((sum, v) => sum + v, 0);
   
   return {
     sellers,
     year: currentYear,
+    fiscalPeriod: 'H1', // first half
+    fiscalMonthCount: FISCAL_HALF_YEAR_MONTHS,
+    teamBudget: TEAM_HALF_YEAR_BUDGET,
     formerSellers: {
       names: FORMER_SELLERS,
-      months: formerMonths,
+      months: formerHalfYearMonths,
       ytd: formerYtd,
     },
   };
@@ -801,17 +815,36 @@ export async function fetchRecentSales(limit: number = 10) {
 
 
 // ============================================
-// WORKDAY BUDGET CALCULATION & GOALS MANAGEMENT
+// FISCAL YEAR & BUDGET CONFIGURATION
 // ============================================
 
-// Default goals for each salesperson (can be overridden via admin)
-const DEFAULT_GOALS: Record<string, number> = {
-  'Niels': 200000,
-  'Robert': 200000,
-  'Søgaard': 200000,
-  'Kristofer': 200000,
-  'Søren': 200000,
+// Fiscal half-year: Jan 1 – Jun 30, 2026
+// Total team budget: 6M (12M annualized)
+const FISCAL_HALF_YEAR_MONTHS = 6; // Jan through Jun
+const FISCAL_START_MONTH = 0; // January (0-indexed)
+const FISCAL_END_MONTH = 5;   // June (0-indexed)
+
+// Half-year budget per salesperson (Jan 1 – Jun 30, 2026)
+const HALF_YEAR_BUDGETS: Record<string, number> = {
+  'Niels': 1200000,
+  'Robert': 1200000,
+  'Søgaard': 1200000,
+  'Kristofer': 600000,
+  'Søren': 1800000,
 };
+
+// Monthly goals derived from half-year budgets
+const DEFAULT_GOALS: Record<string, number> = {};
+for (const [name, budget] of Object.entries(HALF_YEAR_BUDGETS)) {
+  DEFAULT_GOALS[name] = Math.round(budget / FISCAL_HALF_YEAR_MONTHS);
+}
+// Result: Niels 200K, Robert 200K, Søgaard 200K, Kristofer 100K, Søren 300K
+
+const TEAM_HALF_YEAR_BUDGET = Object.values(HALF_YEAR_BUDGETS).reduce((s, v) => s + v, 0); // 6M
+
+// ============================================
+// WORKDAY BUDGET CALCULATION & GOALS MANAGEMENT
+// ============================================
 
 // Calculate workdays (Monday-Friday) in a given month
 export function getWorkdaysInMonth(year: number, month: number): number {
