@@ -57,27 +57,37 @@ export async function appendSaleToSheet(rowData: any[]) {
 }
 
 // Salesperson aliases - maps various name formats to display name
-// Active sellers only — Frank removed (opsagt)
+// Active sellers only — shown on leaderboard
 const SALESPERSON_ALIASES: Record<string, string[]> = {
   'Niels': ['niels', 'niels larsen', 'larsen'],
   'Robert': ['robert', 'robert hintze', 'hintze'],
   'Søgaard': ['søgaard', 'michael søgaard', 'michael'],
-  'Jeppe': ['jeppe', 'jeppe ellebæk', 'ellebæk'],
   'Kristofer': ['kristofer', 'kristofer kripalani', 'kripalani'],
   'Søren': ['søren', 'søren nielsen', 'nielsen', 'sn'],
 };
 
-// Historical sellers — for matching old data (not shown on active leaderboard)
-const HISTORICAL_ALIASES: Record<string, string[]> = {
+// Former sellers — their DB counts toward team budget but NOT shown on active leaderboard
+const FORMER_ALIASES: Record<string, string[]> = {
+  'Jeppe': ['jeppe', 'jeppe ellebæk', 'ellebæk'],
   'Frank': ['frank', 'vilholdt', 'vilholdt johansen', 'frank vilholdt', 'frank vilholdt johansen', 'vilholt', 'vilholt-johannsen', 'fvj'],
+};
+
+// Historical aliases — for matching old data (not a seller, e.g. CFO)
+const HISTORICAL_ALIASES: Record<string, string[]> = {
   'Johnsen': ['johnsen', 'mikael johnsen'],
 };
 
-// Combined aliases for data matching (includes historical)
-const ALL_ALIASES: Record<string, string[]> = { ...SALESPERSON_ALIASES, ...HISTORICAL_ALIASES };
+// Combined aliases for data matching (includes all)
+const ALL_ALIASES: Record<string, string[]> = { ...SALESPERSON_ALIASES, ...FORMER_ALIASES, ...HISTORICAL_ALIASES };
 
-// Get display names for salespeople
+// Active sellers (shown on leaderboard)
 const SALESPEOPLE = Object.keys(SALESPERSON_ALIASES);
+
+// Former sellers (DB counts toward team total, not on active leaderboard)
+const FORMER_SELLERS = Object.keys(FORMER_ALIASES);
+
+// All sellers combined (for budget/team calculations)
+const ALL_SELLERS = [...SALESPEOPLE, ...FORMER_SELLERS];
 
 // Match seller name from sheet to display name
 function matchSalesperson(sellerName: string | undefined | null): string | null {
@@ -106,9 +116,16 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
   
   const rows = response.data.values || [];
   
+  // Track active sellers
   const salesData: Record<string, { db: number; meetings: number; retention: number }> = {};
   SALESPEOPLE.forEach(name => {
     salesData[name] = { db: 0, meetings: 0, retention: 0 };
+  });
+  
+  // Track former sellers separately (their DB counts toward team total)
+  const formerData: Record<string, { db: number }> = {};
+  FORMER_SELLERS.forEach(name => {
+    formerData[name] = { db: 0 };
   });
   
   const now = new Date();
@@ -148,9 +165,14 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
       db = parseFloat(cleanValue) || 0;
     }
     
-    salesData[matchedSeller].db += db;
-    if (meeting === 'JA') salesData[matchedSeller].meetings += 1;
-    if (retention === 'JA') salesData[matchedSeller].retention += db;
+    // Route to active or former seller data
+    if (salesData[matchedSeller]) {
+      salesData[matchedSeller].db += db;
+      if (meeting === 'JA') salesData[matchedSeller].meetings += 1;
+      if (retention === 'JA') salesData[matchedSeller].retention += db;
+    } else if (formerData[matchedSeller]) {
+      formerData[matchedSeller].db += db;
+    }
   });
   
   const leaderboard = SALESPEOPLE.map(name => ({
@@ -161,11 +183,15 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
     goalProgress: (salesData[name].db / 200000) * 100,
   })).sort((a, b) => b.db - a.db);
   
+  // Former sellers' total DB
+  const formerDb = FORMER_SELLERS.reduce((sum, name) => sum + formerData[name].db, 0);
+  
   return {
     leaderboard,
-    totalDb: leaderboard.reduce((sum, s) => sum + s.db, 0),
+    totalDb: leaderboard.reduce((sum, s) => sum + s.db, 0) + formerDb,
     totalMeetings: leaderboard.reduce((sum, s) => sum + s.meetings, 0),
     totalRetention: leaderboard.reduce((sum, s) => sum + s.retention, 0),
+    formerSellersDb: formerDb,
   };
 }
 
@@ -221,7 +247,7 @@ export async function fetchHallOfFame() {
     
     if (!monthlyData[monthKey]) {
       monthlyData[monthKey] = {};
-      SALESPEOPLE.forEach(name => {
+      ALL_SELLERS.forEach(name => {
         monthlyData[monthKey][name] = { db: 0, meetings: 0 };
       });
     }
@@ -234,8 +260,10 @@ export async function fetchHallOfFame() {
       db = parseFloat(cleanValue) || 0;
     }
     
-    monthlyData[monthKey][matchedSeller].db += db;
-    if (meeting === 'JA') monthlyData[monthKey][matchedSeller].meetings += 1;
+    if (monthlyData[monthKey][matchedSeller]) {
+      monthlyData[monthKey][matchedSeller].db += db;
+      if (meeting === 'JA') monthlyData[monthKey][matchedSeller].meetings += 1;
+    }
   });
   
   // Calculate top 2 for each month
@@ -288,9 +316,9 @@ export async function fetchYearlyBreakdown() {
   const now = new Date();
   const currentYear = now.getFullYear();
   
-  // Initialize: 12 months x active sellers
+  // Initialize: 12 months x active sellers + former sellers
   const monthlyDb: Record<string, number[]> = {};
-  SALESPEOPLE.forEach(name => {
+  ALL_SELLERS.forEach(name => {
     monthlyDb[name] = new Array(12).fill(0);
   });
   
@@ -331,6 +359,7 @@ export async function fetchYearlyBreakdown() {
   const YEARLY_GOAL = 2400000;
   const MONTHLY_GOAL = 200000;
   
+  // Active sellers
   const sellers = SALESPEOPLE.map(name => {
     const months = monthlyDb[name];
     const ytd = months.reduce((sum, v) => sum + v, 0);
@@ -344,7 +373,22 @@ export async function fetchYearlyBreakdown() {
     };
   }).sort((a, b) => b.ytd - a.ytd);
   
-  return { sellers, year: currentYear };
+  // Former sellers aggregated
+  const formerMonths = new Array(12).fill(0);
+  FORMER_SELLERS.forEach(name => {
+    monthlyDb[name].forEach((val, i) => { formerMonths[i] += val; });
+  });
+  const formerYtd = formerMonths.reduce((sum, v) => sum + v, 0);
+  
+  return {
+    sellers,
+    year: currentYear,
+    formerSellers: {
+      names: FORMER_SELLERS,
+      months: formerMonths,
+      ytd: formerYtd,
+    },
+  };
 }
 
 // Get all existing order IDs from the sheet (for duplicate checking)
@@ -765,7 +809,6 @@ const DEFAULT_GOALS: Record<string, number> = {
   'Niels': 200000,
   'Robert': 200000,
   'Søgaard': 200000,
-  'Jeppe': 200000,
   'Kristofer': 200000,
   'Søren': 200000,
 };

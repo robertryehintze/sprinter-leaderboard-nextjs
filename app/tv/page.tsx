@@ -35,6 +35,12 @@ interface YearlySeller {
   monthlyGoal: number;
 }
 
+interface FormerSellers {
+  names: string[];
+  months: number[];
+  ytd: number;
+}
+
 interface HallOfFameEntry {
   monthKey: string;
   monthLabel: string;
@@ -48,9 +54,10 @@ interface DashboardData {
   totalDb: number;
   totalMeetings: number;
   totalRetention: number;
+  formerSellersDb?: number;
   recentSales?: { name: string; amount: number; time: string }[];
   goals?: Record<string, number>;
-  yearlyBreakdown?: { sellers: YearlySeller[]; year: number };
+  yearlyBreakdown?: { sellers: YearlySeller[]; year: number; formerSellers?: FormerSellers };
 }
 
 const DB_GOAL = 200000;
@@ -175,7 +182,7 @@ const ActivityFeed = ({ activities, data }: { activities: { name: string; amount
   const [showMotivational, setShowMotivational] = useState(false);
   const [motivationalMessage, setMotivationalMessage] = useState<string | null>(null);
   
-  const TEAM_GOAL = 1200000; // 6 sellers x 200K
+  const TEAM_GOAL = 1000000; // 5 active sellers x 200K
   
   const generateMessage = useCallback(() => {
     if (!data) return null;
@@ -408,7 +415,7 @@ export default function TVDashboard() {
           <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-indigo-400/15">
             <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Team YTD {yearlyData?.year || 2026}</div>
             <div className="text-2xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
-              <AnimatedNumber value={yearlyData?.sellers.reduce((s, v) => s + v.ytd, 0) || 0} suffix=" kr" />
+              <AnimatedNumber value={(yearlyData?.sellers.reduce((s, v) => s + v.ytd, 0) || 0) + (yearlyData?.formerSellers?.ytd || 0)} suffix=" kr" />
             </div>
           </div>
           <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-amber-400/15">
@@ -523,6 +530,26 @@ export default function TVDashboard() {
                     </AnimatedCard>
                   );
                 })}
+                
+                {/* Former sellers aggregated row */}
+                {yearlyData?.formerSellers && yearlyData.formerSellers.ytd > 0 && (
+                  <div className="backdrop-blur-xl bg-white/[0.02] rounded-xl p-2 border border-white/[0.05]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-[100px] shrink-0">
+                        <div className="text-xs font-medium text-white/50">Tidl. sælgere</div>
+                        <div className="text-[10px] text-white/40">
+                          {yearlyData.formerSellers.ytd.toLocaleString('da-DK')} kr
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <MiniBarChart months={yearlyData.formerSellers.months} monthlyGoal={200000} />
+                      </div>
+                      <div className="w-[52px] shrink-0 text-center">
+                        <span className="text-[10px] text-white/30">—</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
