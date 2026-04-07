@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchDashboardDataWithBudget } from '@/lib/google-sheets';
+import { fetchDashboardDataWithBudget, fetchYearlyBreakdown } from '@/lib/google-sheets';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,9 +14,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const timePeriod = (searchParams.get('timePeriod') || 'monthly') as 'daily' | 'monthly' | 'yearly';
     
-    // Use the new function that includes budget info
-    const data = await fetchDashboardDataWithBudget(timePeriod);
-    return NextResponse.json(data);
+    // Fetch dashboard data and yearly breakdown in parallel
+    const [data, yearlyBreakdown] = await Promise.all([
+      fetchDashboardDataWithBudget(timePeriod),
+      fetchYearlyBreakdown(),
+    ]);
+    return NextResponse.json({ ...data, yearlyBreakdown });
   } catch (error: any) {
     console.error('Dashboard error:', error);
     return NextResponse.json({ 

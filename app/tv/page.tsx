@@ -15,25 +15,32 @@ interface BudgetInfo {
   requiredDailyToHitGoal: number;
 }
 
-interface MeetingsBudgetInfo {
-  meetingsGoal: number;
-  expectedMeetings: number;
-  actualMeetings: number;
-  difference: number;
-  isUnderBudget: boolean;
-  requiredMeetingsRemaining: number;
-}
-
 interface SalespersonData {
   name: string;
   db: number;
   meetings: number;
   retention: number;
   goalProgress: number;
-  salesCount?: number; // For "on fire" detection
+  salesCount?: number;
   monthlyGoal?: number;
   budgetInfo?: BudgetInfo;
-  meetingsBudgetInfo?: MeetingsBudgetInfo;
+}
+
+interface YearlySeller {
+  name: string;
+  months: number[];
+  ytd: number;
+  yearlyGoal: number;
+  yearlyProgress: number;
+  monthlyGoal: number;
+}
+
+interface HallOfFameEntry {
+  monthKey: string;
+  monthLabel: string;
+  year: string;
+  first: { name: string; db: number };
+  second: { name: string; db: number };
 }
 
 interface DashboardData {
@@ -43,23 +50,15 @@ interface DashboardData {
   totalRetention: number;
   recentSales?: { name: string; amount: number; time: string }[];
   goals?: Record<string, number>;
+  yearlyBreakdown?: { sellers: YearlySeller[]; year: number };
 }
 
-interface HallOfFameEntry {
-  monthKey: string;
-  monthLabel: string;
-  dbWinner: { name: string; db: number };
-  meetingsWinner: { name: string; meetings: number };
-}
-
-// Goals
-const DB_GOAL = 100000;
-const MEETINGS_GOAL = 6;
+const DB_GOAL = 200000;
+const YEARLY_GOAL = 2400000;
 
 // Confetti Component
 const Confetti = ({ active }: { active: boolean }) => {
   if (!active) return null;
-  
   return (
     <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
       {[...Array(50)].map((_, i) => (
@@ -82,472 +81,190 @@ const FireIcon = ({ animate }: { animate: boolean }) => (
   <span className={`inline-block ${animate ? 'animate-fire' : ''}`}>🔥</span>
 );
 
-// Punching Man Component - appears intermittently when someone is under budget
-// Slides in, punches for a few seconds, then slides out
-const PunchingMan = ({ show, personName }: { show: boolean; personName: string }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const [phase, setPhase] = useState<'hidden' | 'entering' | 'punching' | 'leaving'>('hidden');
-  
-  useEffect(() => {
-    if (!show) {
-      setIsVisible(false);
-      setPhase('hidden');
-      return;
-    }
-    
-    // Random interval between 15-25 seconds for each appearance
-    const scheduleNextAppearance = () => {
-      const delay = 15000 + Math.random() * 10000; // 15-25 seconds
-      return setTimeout(() => {
-        if (show) {
-          // Start the animation sequence
-          setIsVisible(true);
-          setPhase('entering');
-          
-          // After entering (1s), start punching
-          setTimeout(() => setPhase('punching'), 1000);
-          
-          // After punching for 4 seconds, start leaving
-          setTimeout(() => setPhase('leaving'), 5000);
-          
-          // After leaving (1s), hide and schedule next
-          setTimeout(() => {
-            setPhase('hidden');
-            setIsVisible(false);
-          }, 6000);
-        }
-      }, delay);
-    };
-    
-    // Initial appearance after a short delay
-    const initialTimer = setTimeout(() => {
-      if (show) {
-        setIsVisible(true);
-        setPhase('entering');
-        setTimeout(() => setPhase('punching'), 1000);
-        setTimeout(() => setPhase('leaving'), 5000);
-        setTimeout(() => {
-          setPhase('hidden');
-          setIsVisible(false);
-        }, 6000);
-      }
-    }, 2000 + Math.random() * 3000); // Initial delay 2-5 seconds
-    
-    // Set up recurring appearances
-    let recurringTimer: NodeJS.Timeout;
-    const setupRecurring = () => {
-      recurringTimer = scheduleNextAppearance();
-    };
-    
-    // Start recurring after initial animation completes
-    const recurringStartTimer = setTimeout(setupRecurring, 8000);
-    
-    // Set up interval to keep scheduling
-    const intervalId = setInterval(() => {
-      if (show && phase === 'hidden') {
-        clearTimeout(recurringTimer);
-        recurringTimer = scheduleNextAppearance();
-      }
-    }, 20000);
-    
-    return () => {
-      clearTimeout(initialTimer);
-      clearTimeout(recurringTimer);
-      clearTimeout(recurringStartTimer);
-      clearInterval(intervalId);
-    };
-  }, [show, personName]);
-  
-  if (!isVisible) return null;
-  
-  const getTransform = () => {
-    switch (phase) {
-      case 'entering':
-        return 'translateX(-50px) translateY(-50%)';
-      case 'punching':
-        return 'translateX(0) translateY(-50%)';
-      case 'leaving':
-        return 'translateX(-50px) translateY(-50%)';
-      default:
-        return 'translateX(-50px) translateY(-50%)';
-    }
-  };
-  
-  const getOpacity = () => {
-    switch (phase) {
-      case 'entering':
-        return 1;
-      case 'punching':
-        return 1;
-      case 'leaving':
-        return 0;
-      default:
-        return 0;
-    }
-  };
-  
-  return (
-    <div 
-      className="absolute left-0 top-1/2 z-20 transition-all duration-1000 ease-in-out"
-      style={{ 
-        left: '120px',
-        transform: getTransform(),
-        opacity: getOpacity(),
-      }}
-    >
-      <div className="text-2xl md:text-3xl flex items-center">
-        <span className={phase === 'punching' ? 'animate-fist-pump' : ''}>👊</span>
-        <span className={phase === 'punching' ? 'animate-head-shake' : ''}>👴🏻</span>
-      </div>
-    </div>
-  );
-};
-
 // Rank Change Indicator
 const RankIndicator = ({ change }: { change: number }) => {
   if (change === 0) return null;
-  if (change > 0) {
-    return <span className="text-emerald-400 text-xs ml-1 animate-bounce-in">↑{change}</span>;
-  }
+  if (change > 0) return <span className="text-emerald-400 text-xs ml-1 animate-bounce-in">↑{change}</span>;
   return <span className="text-red-400 text-xs ml-1 animate-bounce-in">↓{Math.abs(change)}</span>;
 };
 
-// Wolf of Wall Street / Trump style motivational messages
-const generateMotivationalMessage = (data: DashboardData | null, recentSale?: { name: string; amount: number }) => {
-  if (!data) return null;
-  
-  const TEAM_GOAL = 600000;
-  const teamProgress = (data.totalDb / TEAM_GOAL) * 100;
-  const topPerformer = data.leaderboard[0];
-  const bottomPerformer = data.leaderboard[data.leaderboard.length - 1];
-  
-  // Messages based on team progress
-  const teamMessages = {
-    crushing: [ // > 80%
-      "🚀 VI ER UNSTOPPABLE! Pengene VÆLTER ind som en tsunami af SUCCESS!",
-      "💰 DETTE er hvad VINDERE gør! Wall Street ville være MISUNDELIGE!",
-      "🔥 PHENOMENALT! Vi er ikke bare gode - vi er LEGENDARISKE!",
-      "👑 Konkurrenterne GRÆDER sig i søvn! VI DOMINERER!",
-    ],
-    strong: [ // 50-80%
-      "📈 MOMENTUM er på vores side! Keep pushing, CHAMPIONS!",
-      "💪 Halvvejs der - men vi stopper IKKE før vi har VUNDET!",
-      "🎯 Solid indsats! Men husk: GOOD er fjenden af GREAT!",
-      "⚡ Vi er i ZONEN! Lad os SMADRE det sidste stykke!",
-    ],
-    needsWork: [ // 25-50%
-      "⏰ Tick tock! Tiden løber - men VINDERE finder ALTID en vej!",
-      "🔔 Wake up call! Det er tid til at ACCELERERE!",
-      "💼 Mindre snak, MERE salg! Telefonerne skal GLØDE!",
-      "🎪 Showtime, folkens! Lad os vise hvad vi er lavet af!",
-    ],
-    critical: [ // < 25%
-      "🚨 KODE RØD! Det er nu eller ALDRIG! RING RING RING!",
-      "😤 Er I her for at VINDE eller bare for at DELTAGE?!",
-      "🔥 Sæt ild til telefonerne! Hver samtale er en MULIGHED!",
-      "💀 Failure is NOT an option! Get those deals CLOSED!",
-    ],
-  };
-  
-  // Individual performance messages
-  const getIndividualMessage = (sale: { name: string; amount: number }) => {
-    const person = data.leaderboard.find(p => p.name === sale.name);
-    const progress = person?.goalProgress || 0;
-    
-    if (sale.amount >= 10000) {
-      return [
-        `🎰 ${sale.name} SMADRER det med ${sale.amount.toLocaleString('da-DK')} kr! TREMENDOUS!`,
-        `💎 ${sale.name} closer som en BOSS! ${sale.amount.toLocaleString('da-DK')} kr i kassen!`,
-        `🏆 ${sale.name} viser HVORDAN det gøres! ${sale.amount.toLocaleString('da-DK')} kr - BEAUTIFUL!`,
-      ];
-    } else if (sale.amount >= 5000) {
-      return [
-        `✨ ${sale.name} tilføjede netop ${sale.amount.toLocaleString('da-DK')} kr - Keep it coming!`,
-        `📊 ${sale.name} bygger momentum! ${sale.amount.toLocaleString('da-DK')} kr mere i potten!`,
-        `🎯 ${sale.name} rammer plet igen! ${sale.amount.toLocaleString('da-DK')} kr!`,
-      ];
-    } else {
-      return [
-        `💵 ${sale.name} scorer ${sale.amount.toLocaleString('da-DK')} kr - Every deal counts!`,
-        `📈 ${sale.name} holder dampen oppe med ${sale.amount.toLocaleString('da-DK')} kr`,
-        `✅ ${sale.name} closer: ${sale.amount.toLocaleString('da-DK')} kr i bogen!`,
-      ];
-    }
-  };
-  
-  // Select appropriate message category
-  let messagePool: string[];
-  if (recentSale) {
-    messagePool = getIndividualMessage(recentSale);
-  } else if (teamProgress >= 80) {
-    messagePool = teamMessages.crushing;
-  } else if (teamProgress >= 50) {
-    messagePool = teamMessages.strong;
-  } else if (teamProgress >= 25) {
-    messagePool = teamMessages.needsWork;
-  } else {
-    messagePool = teamMessages.critical;
-  }
-  
-  return messagePool[Math.floor(Math.random() * messagePool.length)];
-};
-
-// Live Activity Feed Component with real data and motivational messages
-const ActivityFeed = ({ 
-  activities, 
-  data 
-}: { 
-  activities: { name: string; amount: number; time: string }[]; 
-  data: DashboardData | null;
-}) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [showMotivational, setShowMotivational] = useState(false);
-  const [motivationalMessage, setMotivationalMessage] = useState<string | null>(null);
+// Animated Number Component
+const AnimatedNumber = ({ value, suffix = '' }: { value: number; suffix?: string }) => {
+  const [displayed, setDisplayed] = useState(value);
+  const ref = useRef(value);
   
   useEffect(() => {
-    if (activities.length === 0) return;
-    
-    // Alternate between sales and motivational messages
-    const interval = setInterval(() => {
-      if (showMotivational) {
-        // Switch back to sales
-        setShowMotivational(false);
-        setCurrentIndex(prev => (prev + 1) % activities.length);
-      } else {
-        // 30% chance to show motivational message instead of next sale
-        if (Math.random() < 0.3) {
-          const msg = generateMotivationalMessage(data);
-          if (msg) {
-            setMotivationalMessage(msg);
-            setShowMotivational(true);
-          } else {
-            setCurrentIndex(prev => (prev + 1) % activities.length);
-          }
-        } else {
-          setCurrentIndex(prev => (prev + 1) % activities.length);
-        }
-      }
-    }, 5000);
-    
-    return () => clearInterval(interval);
-  }, [activities.length, showMotivational, data]);
-  
-  if (activities.length === 0 && !showMotivational) return null;
-  
-  const current = activities[currentIndex];
-  
-  // Show motivational message
-  if (showMotivational && motivationalMessage) {
-    return (
-      <div className="fixed bottom-24 md:bottom-16 left-1/2 transform -translate-x-1/2 z-[100] backdrop-blur-xl bg-gradient-to-r from-amber-900/90 to-orange-900/90 px-4 md:px-6 py-2 md:py-3 rounded-full border border-amber-400/30 shadow-[0_0_30px_rgba(251,191,36,0.25)] animate-slide-in-up">
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-amber-400 animate-pulse text-lg">⚡</span>
-          <span className="text-white font-medium">{motivationalMessage}</span>
-        </div>
-      </div>
-    );
-  }
-  
-  // Show sale message with dynamic text based on amount
-  const saleMessage = generateMotivationalMessage(data, current);
-  
-  return (
-    <div className="fixed bottom-24 md:bottom-16 left-1/2 transform -translate-x-1/2 z-[100] backdrop-blur-xl bg-slate-900/90 px-4 md:px-6 py-2 md:py-3 rounded-full border border-white/20 shadow-[0_0_30px_rgba(255,255,255,0.15)] animate-slide-in-up">
-      <div className="flex items-center gap-3 text-sm">
-        <span className="text-emerald-400 animate-pulse">●</span>
-        <span className="text-white/90">
-          {saleMessage || (
-            <>
-              <span className="font-semibold text-white">{current.name}</span> lukkede netop{' '}
-              <span className="text-teal-300 font-semibold">{current.amount.toLocaleString('da-DK')} kr</span>
-            </>
-          )}
-        </span>
-        <span className="text-white/30 text-xs">{current.time}</span>
-      </div>
-    </div>
-  );
-};
-
-// Animated Number Counter Hook
-const useAnimatedNumber = (targetValue: number, duration: number = 1500) => {
-  const [displayValue, setDisplayValue] = useState(0);
-  const previousValue = useRef(0);
-  
-  useEffect(() => {
-    const startValue = previousValue.current;
+    const start = ref.current;
+    const end = value;
+    const duration = 800;
     const startTime = Date.now();
     
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      const currentValue = startValue + (targetValue - startValue) * easeOutQuart;
-      
-      setDisplayValue(Math.round(currentValue));
-      
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        previousValue.current = targetValue;
-      }
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayed(Math.round(start + (end - start) * eased));
+      if (progress < 1) requestAnimationFrame(animate);
     };
     
     requestAnimationFrame(animate);
-  }, [targetValue, duration]);
+    ref.current = value;
+  }, [value]);
   
-  return displayValue;
+  return <>{displayed.toLocaleString('da-DK')}{suffix}</>;
 };
 
-// Get current month name in Danish
-const getCurrentMonthName = () => {
-  const monthNames = ['Januar', 'Februar', 'Marts', 'April', 'Maj', 'Juni', 
-                      'Juli', 'August', 'September', 'Oktober', 'November', 'December'];
-  const now = new Date();
-  return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-};
-
-// Animated Card Component
-const AnimatedCard = ({ 
-  children, 
-  index, 
-  className 
-}: { 
-  children: React.ReactNode; 
-  index: number; 
-  className: string;
-}) => {
-  const [isVisible, setIsVisible] = useState(false);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), index * 100);
-    return () => clearTimeout(timer);
-  }, [index]);
+// Animated Progress Bar
+const AnimatedProgressBar = ({ progress, isLeader, color = 'teal' }: { progress: number; isLeader: boolean; color?: string }) => {
+  const clampedProgress = Math.min(progress, 100);
+  const colorMap: Record<string, string> = {
+    teal: 'from-teal-400 to-emerald-400',
+    amber: 'from-amber-400 to-yellow-300',
+    indigo: 'from-indigo-400 to-violet-400',
+  };
   
   return (
-    <div 
-      className={`${className} transform transition-all duration-500 ease-out ${
-        isVisible 
-          ? 'opacity-100 translate-y-0' 
-          : 'opacity-0 translate-y-4'
-      }`}
-    >
-      {children}
-    </div>
-  );
-};
-
-// Animated Progress Bar Component
-const AnimatedProgressBar = ({ 
-  progress, 
-  isLeader, 
-  color 
-}: { 
-  progress: number; 
-  isLeader: boolean;
-  color: 'teal' | 'indigo';
-}) => {
-  const [width, setWidth] = useState(0);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => setWidth(Math.min(progress, 100)), 300);
-    return () => clearTimeout(timer);
-  }, [progress]);
-  
-  const gradientClass = color === 'teal'
-    ? isLeader 
-      ? 'bg-gradient-to-r from-teal-400/80 to-teal-300/90 shadow-[0_0_12px_rgba(94,234,212,0.4)]' 
-      : 'bg-gradient-to-r from-teal-500/60 to-teal-400/70 shadow-[0_0_8px_rgba(20,184,166,0.3)]'
-    : isLeader
-      ? 'bg-gradient-to-r from-indigo-400/80 to-violet-300/90 shadow-[0_0_12px_rgba(167,139,250,0.4)]' 
-      : 'bg-gradient-to-r from-indigo-500/60 to-indigo-400/70 shadow-[0_0_8px_rgba(99,102,241,0.3)]';
-  
-  return (
-    <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-      <div 
-        className={`h-full rounded-full transition-all duration-1000 ease-out ${gradientClass} ${
-          isLeader ? 'animate-pulse-subtle' : ''
-        }`}
-        style={{ width: `${width}%` }} 
+    <div className="w-full bg-white/[0.06] rounded-full h-2 overflow-hidden">
+      <div
+        className={`h-full rounded-full bg-gradient-to-r ${colorMap[color] || colorMap.teal} transition-all duration-1000 ease-out ${isLeader ? 'animate-pulse-subtle' : ''}`}
+        style={{ width: `${clampedProgress}%` }}
       />
     </div>
   );
 };
 
-// Animated Number Display Component
-const AnimatedNumber = ({ value, suffix = '' }: { value: number; suffix?: string }) => {
-  const animatedValue = useAnimatedNumber(value);
-  return <>{animatedValue.toLocaleString('da-DK', { maximumFractionDigits: 0 })}{suffix}</>;
+// Animated Card
+const AnimatedCard = ({ children, index, className }: { children: React.ReactNode; index: number; className?: string }) => (
+  <div className={className} style={{ animationDelay: `${index * 0.08}s` }}>
+    {children}
+  </div>
+);
+
+// Mini bar chart for monthly breakdown
+const MiniBarChart = ({ months, monthlyGoal }: { months: number[]; monthlyGoal: number }) => {
+  const now = new Date();
+  const currentMonthIdx = now.getMonth();
+  const maxVal = Math.max(...months, monthlyGoal);
+  const labels = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  
+  return (
+    <div className="flex items-end gap-[2px] h-[32px]">
+      {months.slice(0, currentMonthIdx + 1).map((val, i) => {
+        const height = maxVal > 0 ? (val / maxVal) * 100 : 0;
+        const isCurrentMonth = i === currentMonthIdx;
+        const overGoal = val >= monthlyGoal;
+        return (
+          <div key={i} className="flex flex-col items-center" style={{ flex: 1 }}>
+            <div
+              className={`w-full rounded-t-sm transition-all ${
+                overGoal ? 'bg-emerald-400' : isCurrentMonth ? 'bg-teal-400' : val > 0 ? 'bg-teal-600' : 'bg-white/10'
+              }`}
+              style={{ height: `${Math.max(height, 4)}%`, minHeight: '2px' }}
+              title={`${labels[i]}: ${val.toLocaleString('da-DK')} kr`}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// Activity Feed
+const ActivityFeed = ({ activities, data }: { activities: { name: string; amount: number; time: string }[]; data: DashboardData | null }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showMotivational, setShowMotivational] = useState(false);
+  const [motivationalMessage, setMotivationalMessage] = useState<string | null>(null);
+  
+  const TEAM_GOAL = 1200000; // 6 sellers x 200K
+  
+  const generateMessage = useCallback(() => {
+    if (!data) return null;
+    const teamProgress = (data.totalDb / TEAM_GOAL) * 100;
+    const messages = teamProgress >= 80
+      ? ["🚀 VI ER UNSTOPPABLE!", "💰 VINDERE gør det SÅDAN!", "🔥 LEGENDARISK indsats!"]
+      : teamProgress >= 50
+      ? ["📈 MOMENTUM er på vores side!", "💪 Keep pushing, CHAMPIONS!", "⚡ Vi er i ZONEN!"]
+      : teamProgress >= 25
+      ? ["⏰ Tick tock! Tid til at ACCELERERE!", "💼 Telefonerne skal GLØDE!", "🎪 Showtime, folkens!"]
+      : ["🚨 KODE RØD! RING RING RING!", "🔥 Sæt ild til telefonerne!", "😤 Er I her for at VINDE?!"];
+    return messages[Math.floor(Math.random() * messages.length)];
+  }, [data]);
+  
+  useEffect(() => {
+    if (activities.length === 0) return;
+    const interval = setInterval(() => {
+      if (showMotivational) {
+        setShowMotivational(false);
+        setCurrentIndex(prev => (prev + 1) % activities.length);
+      } else {
+        setMotivationalMessage(generateMessage());
+        setShowMotivational(true);
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activities, showMotivational, generateMessage]);
+  
+  if (activities.length === 0) return null;
+  const current = activities[currentIndex];
+  
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-40">
+      <div className="bg-gradient-to-r from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl border-t border-white/10 px-6 py-3">
+        <div className="flex items-center justify-center gap-3 text-sm">
+          {showMotivational && motivationalMessage ? (
+            <span className="text-amber-300 font-semibold animate-slide-in-up">{motivationalMessage}</span>
+          ) : current ? (
+            <span className="text-white/80 animate-slide-in-up">
+              💵 <span className="font-semibold text-teal-300">{current.name}</span> closede{' '}
+              <span className="font-bold text-white">{current.amount.toLocaleString('da-DK')} kr</span>
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Month name helper
+const getCurrentMonthName = () => {
+  const months = ['Januar','Februar','Marts','April','Maj','Juni','Juli','August','September','Oktober','November','December'];
+  return months[new Date().getMonth()];
 };
 
 export default function TVDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>([]);
+  const [recentSales, setRecentSales] = useState<{ name: string; amount: number; time: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [dataKey, setDataKey] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
   const [showConfetti, setShowConfetti] = useState(false);
   const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
   const [rankChanges, setRankChanges] = useState<Record<string, number>>({});
-  
-  // Real recent sales from API
-  const [recentSales, setRecentSales] = useState<{ name: string; amount: number; time: string }[]>([]);
-  
-  // Webmerc sync state
+  const [dataKey, setDataKey] = useState(0);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncResult, setSyncResult] = useState<{ newOrders: number; message: string } | null>(null);
   
-  // Trigger Webmerc sync using internal API
   const triggerSync = async () => {
     if (syncStatus === 'syncing') return;
-    
     setSyncStatus('syncing');
     setSyncResult(null);
-    
     try {
-      // Call the internal sync API endpoint
-      const response = await fetch('/api/sync?manual=true', {
-        method: 'GET',
-      });
-      
+      const response = await fetch('/api/sync?manual=true');
       const result = await response.json();
-      
       if (result.success) {
         const syncedOrders = result.stats?.syncedOrders || 0;
         setSyncStatus('success');
-        setSyncResult({
-          newOrders: syncedOrders,
-          message: syncedOrders > 0 
-            ? `Sync færdig! ${syncedOrders} nye ordrer tilføjet.`
-            : 'Sync færdig! Ingen nye ordrer fundet.',
-        });
-        
-        // Refresh data if new orders were added
-        if (syncedOrders > 0) {
-          setTimeout(() => fetchData(), 2000);
-        }
+        setSyncResult({ newOrders: syncedOrders, message: syncedOrders > 0 ? `${syncedOrders} nye ordrer!` : 'Ingen nye ordrer.' });
+        if (syncedOrders > 0) setTimeout(() => fetchData(), 2000);
       } else {
         setSyncStatus('error');
-        setSyncResult({
-          newOrders: 0,
-          message: result.error || 'Sync fejlede. Prøv igen senere.',
-        });
+        setSyncResult({ newOrders: 0, message: 'Sync fejlede.' });
       }
-      
-      // Reset status after 5 seconds
-      setTimeout(() => {
-        setSyncStatus('idle');
-        setSyncResult(null);
-      }, 5000);
-      
-    } catch (error) {
-      console.error('Sync error:', error);
+      setTimeout(() => { setSyncStatus('idle'); setSyncResult(null); }, 5000);
+    } catch {
       setSyncStatus('error');
-      setSyncResult({ newOrders: 0, message: 'Kunne ikke starte sync. Prøv igen.' });
-      setTimeout(() => {
-        setSyncStatus('idle');
-        setSyncResult(null);
-      }, 5000);
+      setSyncResult({ newOrders: 0, message: 'Kunne ikke starte sync.' });
+      setTimeout(() => { setSyncStatus('idle'); setSyncResult(null); }, 5000);
     }
   };
   
@@ -563,49 +280,29 @@ export default function TVDashboard() {
       const hofData = await hofRes.json();
       const recentSalesData = await recentSalesRes.json();
       
-      // Update recent sales if we got valid data
-      if (Array.isArray(recentSalesData) && recentSalesData.length > 0) {
-        setRecentSales(recentSalesData);
-      }
+      if (Array.isArray(recentSalesData) && recentSalesData.length > 0) setRecentSales(recentSalesData);
       
       // Calculate rank changes
       if (data?.leaderboard) {
         const newRanks: Record<string, number> = {};
         const changes: Record<string, number> = {};
-        
         dashboardData.leaderboard.forEach((person: SalespersonData, index: number) => {
           newRanks[person.name] = index;
-          if (previousRanks[person.name] !== undefined) {
-            changes[person.name] = previousRanks[person.name] - index;
-          }
+          if (previousRanks[person.name] !== undefined) changes[person.name] = previousRanks[person.name] - index;
         });
-        
         setPreviousRanks(newRanks);
         setRankChanges(changes);
-      } else {
-        // First load - set initial ranks
-        const initialRanks: Record<string, number> = {};
-        dashboardData.leaderboard.forEach((person: SalespersonData, index: number) => {
-          initialRanks[person.name] = index;
-        });
-        setPreviousRanks(initialRanks);
-      }
-      
-      // Check for goal achievements and trigger confetti
-      // Only trigger if we have previous data (not on first load) and someone crossed the goal
-      if (data?.leaderboard) {
-        const anyoneReachedGoal = dashboardData.leaderboard.some(
-          (person: SalespersonData) => {
-            const previousPerson = data.leaderboard.find(p => p.name === person.name);
-            // Only trigger if they were below goal before and are now at/above goal
-            return person.db >= DB_GOAL && previousPerson && previousPerson.db < DB_GOAL;
-          }
-        );
         
-        if (anyoneReachedGoal) {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 5000);
-        }
+        // Check for goal achievements
+        const anyoneReachedGoal = dashboardData.leaderboard.some((person: SalespersonData) => {
+          const prev = data.leaderboard.find(p => p.name === person.name);
+          return person.db >= DB_GOAL && prev && prev.db < DB_GOAL;
+        });
+        if (anyoneReachedGoal) { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 5000); }
+      } else {
+        const initialRanks: Record<string, number> = {};
+        dashboardData.leaderboard.forEach((person: SalespersonData, index: number) => { initialRanks[person.name] = index; });
+        setPreviousRanks(initialRanks);
       }
       
       setData(dashboardData);
@@ -626,45 +323,38 @@ export default function TVDashboard() {
   }, []);
   
   const getMedal = (i: number) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
-
-  // Check if person is "on fire" (simulated - in real app would check sales count today)
+  
   const isOnFire = (name: string) => {
-    // Simulate: top performer with high goal progress is "on fire"
     const person = data?.leaderboard.find(p => p.name === name);
     return person && person.goalProgress >= 80;
   };
 
   const getCardStyle = (index: number) => {
-    const baseGlass = 'backdrop-blur-2xl bg-white/[0.04] hover:bg-white/[0.06] transition-all duration-300';
-    if (index === 0) {
-      return `${baseGlass} border border-amber-300/50 shadow-[0_0_30px_rgba(251,191,36,0.2),0_0_60px_rgba(251,191,36,0.1),inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.1)] hover:shadow-[0_0_40px_rgba(251,191,36,0.3),0_0_80px_rgba(251,191,36,0.15)]`;
-    } else if (index === 1) {
-      return `${baseGlass} border border-slate-300/40 shadow-[0_0_25px_rgba(203,213,225,0.15),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(0,0,0,0.08)] hover:shadow-[0_0_35px_rgba(203,213,225,0.2)]`;
-    } else if (index === 2) {
-      return `${baseGlass} border border-amber-600/40 shadow-[0_0_22px_rgba(217,119,6,0.15),inset_0_1px_0_rgba(255,255,255,0.1),inset_0_-1px_0_rgba(0,0,0,0.08)] hover:shadow-[0_0_30px_rgba(217,119,6,0.2)]`;
-    } else {
-      return `${baseGlass} border border-white/[0.12] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-1px_0_rgba(0,0,0,0.05)] hover:border-white/[0.18]`;
-    }
+    const base = 'backdrop-blur-2xl bg-white/[0.04] transition-all duration-300';
+    if (index === 0) return `${base} border border-amber-300/50 shadow-[0_0_30px_rgba(251,191,36,0.2)]`;
+    if (index === 1) return `${base} border border-slate-300/40 shadow-[0_0_25px_rgba(203,213,225,0.15)]`;
+    if (index === 2) return `${base} border border-amber-600/40 shadow-[0_0_22px_rgba(217,119,6,0.15)]`;
+    return `${base} border border-white/[0.12]`;
   };
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-white/80 text-2xl animate-pulse">Indlæser...</div>
       </div>
     );
   }
   
   if (!data) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-400/80 text-2xl">Fejl ved indlæsning</div>;
+    return <div className="h-screen bg-slate-950 flex items-center justify-center text-red-400/80 text-2xl">Fejl ved indlæsning</div>;
   }
 
-  const meetingsLeaderboard = [...data.leaderboard].sort((a, b) => b.meetings - a.meetings);
   const currentMonth = getCurrentMonthName();
+  const yearlyData = data.yearlyBreakdown;
+  const monthLabels = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
   
   return (
-    <div className="min-h-screen text-white p-4 md:p-8 pb-32 md:pb-24 relative">
-      {/* Confetti Effect */}
+    <div className="h-screen text-white p-4 pb-14 relative overflow-hidden flex flex-col">
       <Confetti active={showConfetti} />
       
       {/* Animated Gradient Background */}
@@ -676,279 +366,226 @@ export default function TVDashboard() {
         <div className="particle particle-2" />
         <div className="particle particle-3" />
         <div className="particle particle-4" />
-        <div className="particle particle-5" />
-        <div className="particle particle-6" />
-        <div className="particle particle-7" />
-        <div className="particle particle-8" />
-        
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/8 rounded-full blur-3xl animate-float-slow animate-pulse-glow" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/8 rounded-full blur-3xl animate-float-slow-reverse animate-pulse-glow-delayed" />
-        <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-amber-500/6 rounded-full blur-3xl animate-float-medium" />
-        <div className="absolute top-1/2 right-1/3 w-48 h-48 bg-violet-500/5 rounded-full blur-3xl animate-float-slow" />
       </div>
       
-      <div className="relative z-10">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4 animate-fade-in">
-          <h1 className="text-3xl md:text-5xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
-          <div className="text-left md:text-right flex flex-row md:flex-col items-center md:items-end gap-3 md:gap-0">
-            <div className="flex gap-2">
-              <Link href="/input" className="px-4 md:px-6 py-2 md:py-3 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 hover:scale-105 transition-all duration-300 inline-block shadow-[0_0_20px_rgba(255,255,255,0.05)] text-sm md:text-base">
-                ➕ Tilføj Salg
-              </Link>
-              <button 
-                onClick={triggerSync}
-                disabled={syncStatus === 'syncing'}
-                className={`px-4 md:px-6 py-2 md:py-3 backdrop-blur-xl border rounded-xl font-semibold transition-all duration-300 inline-block text-sm md:text-base ${
-                  syncStatus === 'syncing' 
-                    ? 'bg-amber-500/20 border-amber-400/30 text-amber-300 cursor-wait animate-pulse'
-                    : syncStatus === 'success'
-                    ? 'bg-emerald-500/20 border-emerald-400/30 text-emerald-300'
-                    : syncStatus === 'error'
-                    ? 'bg-red-500/20 border-red-400/30 text-red-300'
-                    : 'bg-teal-500/10 border-teal-400/20 text-teal-300 hover:bg-teal-500/20 hover:scale-105'
-                } shadow-[0_0_20px_rgba(20,184,166,0.05)]`}
-              >
-                {syncStatus === 'syncing' ? '🔄 Syncer...' : syncStatus === 'success' ? '✅ Synced!' : syncStatus === 'error' ? '❌ Fejl' : '🔄 Sync Webmerc'}
-              </button>
-              <Link href="/admin" className="px-4 md:px-6 py-2 md:py-3 bg-slate-500/10 backdrop-blur-xl border border-slate-400/20 text-slate-300 rounded-xl font-semibold hover:bg-slate-500/20 hover:scale-105 transition-all duration-300 inline-block shadow-[0_0_20px_rgba(100,116,139,0.05)] text-sm md:text-base">
-                ⚙️ Admin
-              </Link>
-            </div>
-            {syncResult && (
-              <div className={`text-xs md:text-sm mt-1 ${
-                syncStatus === 'success' ? 'text-emerald-400' : syncStatus === 'error' ? 'text-red-400' : 'text-amber-400'
-              }`}>
-                {syncResult.message}
-              </div>
-            )}
-            <div className="text-xs md:text-sm text-white/40 mt-2">Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}</div>
+      <div className="relative z-10 flex flex-col flex-1 min-h-0">
+        {/* Header - compact */}
+        <div className="flex justify-between items-center mb-3 animate-fade-in">
+          <h1 className="text-3xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
+          <div className="flex items-center gap-3">
+            <Link href="/input" className="px-4 py-2 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 transition-all text-sm">
+              ➕ Tilføj Salg
+            </Link>
+            <button 
+              onClick={triggerSync}
+              disabled={syncStatus === 'syncing'}
+              className={`px-4 py-2 backdrop-blur-xl border rounded-xl font-semibold transition-all text-sm ${
+                syncStatus === 'syncing' ? 'bg-amber-500/20 border-amber-400/30 text-amber-300 animate-pulse'
+                : syncStatus === 'success' ? 'bg-emerald-500/20 border-emerald-400/30 text-emerald-300'
+                : syncStatus === 'error' ? 'bg-red-500/20 border-red-400/30 text-red-300'
+                : 'bg-teal-500/10 border-teal-400/20 text-teal-300 hover:bg-teal-500/20'
+              }`}
+            >
+              {syncStatus === 'syncing' ? '🔄 Syncer...' : syncStatus === 'success' ? '✅ Synced!' : syncStatus === 'error' ? '❌ Fejl' : '🔄 Sync'}
+            </button>
+            <Link href="/admin" className="px-4 py-2 bg-slate-500/10 backdrop-blur-xl border border-slate-400/20 text-slate-300 rounded-xl font-semibold hover:bg-slate-500/20 transition-all text-sm">
+              ⚙️
+            </Link>
+            <div className="text-xs text-white/40">{lastUpdated.toLocaleTimeString('da-DK')}</div>
           </div>
         </div>
         
-        {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-2 md:gap-6 mb-6 md:mb-8 animate-fade-in">
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-teal-400/15 shadow-[0_0_30px_rgba(20,184,166,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
-            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total DB</div>
-            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">
+        {/* Summary Stats Row */}
+        <div className="grid grid-cols-3 gap-3 mb-3 animate-fade-in">
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-teal-400/15">
+            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Total DB {currentMonth}</div>
+            <div className="text-2xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">
               <AnimatedNumber value={data.totalDb} suffix=" kr" />
             </div>
           </div>
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-indigo-400/15 shadow-[0_0_30px_rgba(99,102,241,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
-            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Total Møder</div>
-            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
-              <AnimatedNumber value={data.totalMeetings} />
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-indigo-400/15">
+            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Team YTD {yearlyData?.year || 2026}</div>
+            <div className="text-2xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
+              <AnimatedNumber value={yearlyData?.sellers.reduce((s, v) => s + v.ytd, 0) || 0} suffix=" kr" />
             </div>
           </div>
-          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl md:rounded-2xl p-3 md:p-6 text-center border border-amber-400/15 shadow-[0_0_30px_rgba(251,191,36,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] hover:scale-105 transition-transform duration-300">
-            <div className="text-white/40 text-[10px] md:text-sm mb-1 md:mb-2 font-medium tracking-wide">Retention</div>
-            <div className="text-lg md:text-4xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">
+          <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-amber-400/15">
+            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Retention</div>
+            <div className="text-2xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">
               <AnimatedNumber value={data.totalRetention} suffix=" kr" />
             </div>
           </div>
         </div>
         
-        {/* Leaderboards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-6 md:mb-8">
-          {/* DB Leaderboard */}
-          <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)] animate-slide-up">
-            <h2 className="text-lg md:text-2xl font-semibold mb-3 md:mb-5 text-teal-200/90 tracking-wide">💰 DB Leaderboard - {currentMonth}</h2>
-            <div className="space-y-3" key={`db-${dataKey}`}>
+        {/* Main Grid: 2 columns */}
+        <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
+          
+          {/* LEFT COLUMN: DB Leaderboard - Current Month */}
+          <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-2xl p-4 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)] animate-slide-up flex flex-col min-h-0">
+            <h2 className="text-lg font-semibold mb-2 text-teal-200/90 tracking-wide">💰 DB Leaderboard — {currentMonth}</h2>
+            <div className="space-y-2 overflow-hidden flex-1" key={`db-${dataKey}`}>
               {data.leaderboard.map((person, index) => {
                 const monthlyGoal = person.monthlyGoal || DB_GOAL;
                 const isOverGoal = person.db >= monthlyGoal;
                 const missingAmount = monthlyGoal - person.db;
                 const onFire = isOnFire(person.name);
-                // Use workday budget calculation - show punching man if behind on daily budget
-                const isUnderWorkdayBudget = person.budgetInfo?.isUnderBudget ?? false;
+                const progressPct = Math.min((person.db / monthlyGoal) * 100, 100);
                 
                 return (
-                  <AnimatedCard 
-                    key={person.name} 
-                    index={index}
-                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl relative overflow-visible ${getCardStyle(index)}`}
-                  >
-                    {/* Punching man for those behind on workday budget (not top 3) */}
-                    <PunchingMan show={isUnderWorkdayBudget && index > 2} personName={person.name} />
-                    
+                  <AnimatedCard key={person.name} index={index} className={`p-3 rounded-xl relative ${getCardStyle(index)}`}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 md:gap-4 flex-1">
-                        <div className={`text-xl md:text-3xl font-bold w-8 md:w-12 text-center ${index === 0 ? 'animate-bounce-subtle' : ''}`}>
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className={`text-2xl font-bold w-10 text-center ${index === 0 ? 'animate-bounce-subtle' : ''}`}>
                           {getMedal(index)}
                         </div>
                         <div>
-                          <div className="text-base md:text-xl font-semibold text-white/95 flex items-center gap-1">
+                          <div className="text-base font-semibold text-white/95 flex items-center gap-1">
                             {person.name}
                             {onFire && <FireIcon animate={true} />}
                             <RankIndicator change={rankChanges[person.name] || 0} />
                           </div>
-                          <div className="text-[10px] md:text-xs text-white/40 font-medium">
-                            <AnimatedNumber value={Math.round(person.goalProgress * 10) / 10} />% af mål
+                          <div className="text-[10px] text-white/40 font-medium">
+                            {isOverGoal ? (
+                              <span className="text-emerald-400">{Math.round(person.goalProgress)}% af mål</span>
+                            ) : (
+                              <span>Mangler {missingAmount.toLocaleString('da-DK')} kr</span>
+                            )}
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className={`text-lg md:text-2xl font-bold ${isOverGoal ? 'text-emerald-400 animate-glow' : 'text-white/95'}`}>
+                        <div className={`text-xl font-bold ${isOverGoal ? 'text-emerald-400 animate-glow' : 'text-white/95'}`}>
                           <AnimatedNumber value={person.db} suffix=" kr" />
                         </div>
-                        {!isOverGoal && (
-                          <div className="text-[10px] md:text-xs text-white/30 font-medium">
-                            Mangler <AnimatedNumber value={missingAmount} suffix=" kr" />
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <AnimatedProgressBar progress={progressPct} isLeader={index === 0} color="teal" />
+                    </div>
+                  </AnimatedCard>
+                );
+              })}
+            </div>
+          </div>
+          
+          {/* RIGHT COLUMN: Yearly Budget + Hall of Fame */}
+          <div className="flex flex-col gap-3 min-h-0">
+            
+            {/* Yearly Budget Section */}
+            <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-2xl p-4 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)] animate-slide-up-delayed flex-1 min-h-0 flex flex-col">
+              <h2 className="text-lg font-semibold mb-2 text-indigo-200/90 tracking-wide">📊 Årsbudget {yearlyData?.year || 2026}</h2>
+              <div className="space-y-2 overflow-hidden flex-1">
+                {(yearlyData?.sellers || []).map((seller, index) => {
+                  const progressPct = Math.min(seller.yearlyProgress, 100);
+                  const remaining = seller.yearlyGoal - seller.ytd;
+                  const currentMonthIdx = new Date().getMonth();
+                  const expectedYtd = seller.monthlyGoal * (currentMonthIdx + 1);
+                  const isAhead = seller.ytd >= expectedYtd;
+                  
+                  return (
+                    <AnimatedCard key={seller.name} index={index} className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 border border-white/[0.08]">
+                      <div className="flex items-center gap-3">
+                        {/* Name + YTD */}
+                        <div className="w-[100px] shrink-0">
+                          <div className="text-sm font-semibold text-white/90">{seller.name}</div>
+                          <div className={`text-xs font-bold ${isAhead ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {seller.ytd.toLocaleString('da-DK')} kr
+                          </div>
+                        </div>
+                        
+                        {/* Mini bar chart */}
+                        <div className="flex-1">
+                          <MiniBarChart months={seller.months} monthlyGoal={seller.monthlyGoal} />
+                        </div>
+                        
+                        {/* Progress circle */}
+                        <div className="w-[52px] h-[52px] shrink-0 relative">
+                          <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+                            <circle
+                              cx="18" cy="18" r="15.5" fill="none"
+                              stroke={isAhead ? '#34d399' : '#fbbf24'}
+                              strokeWidth="3"
+                              strokeDasharray={`${progressPct * 0.975} 100`}
+                              strokeLinecap="round"
+                              className="transition-all duration-1000"
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className={`text-[10px] font-bold ${isAhead ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              {Math.round(seller.yearlyProgress)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </AnimatedCard>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {/* Hall of Fame Section */}
+            {hallOfFame.length > 0 && (
+              <div className="backdrop-blur-xl bg-amber-500/[0.04] rounded-2xl p-4 border border-amber-400/20 shadow-[0_0_40px_rgba(251,191,36,0.06)] animate-fade-in-delayed shrink-0">
+                <h2 className="text-lg font-semibold mb-2 text-amber-200/90 tracking-wide">🏅 Hall of Fame {hallOfFame[0]?.year || ''}</h2>
+                <div className="grid grid-cols-3 gap-2">
+                  {hallOfFame.map((entry, index) => (
+                    <div key={entry.monthKey} className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-2 border border-amber-300/15">
+                      <div className="text-[10px] text-amber-300/70 font-semibold mb-1">{entry.monthLabel}</div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-white/80 flex items-center gap-1">
+                            <span className="text-amber-400">🥇</span> {entry.first.name}
+                          </span>
+                          <span className="text-[10px] text-teal-300/90 font-semibold">
+                            {(entry.first.db / 1000).toFixed(0)}k
+                          </span>
+                        </div>
+                        {entry.second.name !== '-' && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-white/60 flex items-center gap-1">
+                              <span className="text-slate-300">🥈</span> {entry.second.name}
+                            </span>
+                            <span className="text-[10px] text-white/50 font-semibold">
+                              {(entry.second.db / 1000).toFixed(0)}k
+                            </span>
                           </div>
                         )}
                       </div>
                     </div>
-                    <div className="mt-3">
-                      <AnimatedProgressBar 
-                        progress={person.goalProgress} 
-                        isLeader={index === 0}
-                        color="teal"
-                      />
-                    </div>
-                  </AnimatedCard>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Meetings Leaderboard */}
-          <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)] animate-slide-up-delayed">
-            <h2 className="text-lg md:text-2xl font-semibold mb-3 md:mb-5 text-indigo-200/90 tracking-wide">📅 Møde Leaderboard - {currentMonth}</h2>
-            <div className="space-y-3" key={`meetings-${dataKey}`}>
-              {meetingsLeaderboard.map((person, index) => {
-                const isOverGoal = person.meetings >= MEETINGS_GOAL;
-                const meetingProgress = (person.meetings / MEETINGS_GOAL) * 100;
-                // Check if behind on meetings budget based on workdays
-                const isUnderMeetingsBudget = person.meetingsBudgetInfo?.isUnderBudget ?? false;
-                
-                return (
-                  <AnimatedCard 
-                    key={person.name} 
-                    index={index}
-                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl relative overflow-visible ${getCardStyle(index)}`}
-                  >
-                    {/* Punching man for those behind on meetings budget (not top 3) */}
-                    <PunchingMan show={isUnderMeetingsBudget && index > 2} personName={`meetings-${person.name}`} />
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 md:gap-4 flex-1">
-                        <div className={`text-xl md:text-3xl font-bold w-8 md:w-12 text-center ${index === 0 ? 'animate-bounce-subtle' : ''}`}>
-                          {getMedal(index)}
-                        </div>
-                        <div>
-                          <div className="text-base md:text-xl font-semibold text-white/95">{person.name}</div>
-                          <div className="text-[10px] md:text-xs text-white/40 font-medium">
-                            <span className={isOverGoal ? 'text-emerald-400' : 'text-white/40'}>{person.meetings}</span>
-                            <span className="text-white/40">/{MEETINGS_GOAL} møder</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-lg md:text-2xl font-bold ${isOverGoal ? 'text-emerald-400 animate-glow' : 'text-white/95'}`}>
-                          {person.meetings} {person.meetings === 1 ? 'møde' : 'møder'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <AnimatedProgressBar 
-                        progress={meetingProgress} 
-                        isLeader={index === 0}
-                        color="indigo"
-                      />
-                    </div>
-                  </AnimatedCard>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        
-        {/* Hall of Fame Section */}
-        {hallOfFame.length > 0 && (
-          <div className="mb-6 md:mb-8 animate-fade-in-delayed">
-            <div className="backdrop-blur-xl bg-amber-500/[0.04] rounded-2xl md:rounded-3xl p-4 md:p-6 border border-amber-400/20 shadow-[0_0_40px_rgba(251,191,36,0.06)]">
-              <h2 className="text-lg md:text-2xl font-semibold mb-3 md:mb-5 text-amber-200/90 tracking-wide">🏅 Hall of Fame</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {hallOfFame.slice(0, 6).map((entry, index) => (
-                  <AnimatedCard
-                    key={entry.monthKey}
-                    index={index}
-                    className="backdrop-blur-xl bg-white/[0.03] rounded-2xl p-4 border border-amber-300/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
-                  >
-                    <div className="text-sm text-amber-300/80 font-semibold mb-3">{entry.monthLabel}</div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">💰</span>
-                          <span className="text-white/80 text-sm">{entry.dbWinner.name}</span>
-                        </div>
-                        <span className="text-teal-300/90 text-sm font-semibold">
-                          {entry.dbWinner.db.toLocaleString('da-DK', { maximumFractionDigits: 0 })} kr
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">📅</span>
-                          <span className="text-white/80 text-sm">{entry.meetingsWinner.name}</span>
-                        </div>
-                        <span className="text-indigo-300/90 text-sm font-semibold">
-                          {entry.meetingsWinner.meetings} møder
-                        </span>
-                      </div>
-                    </div>
-                  </AnimatedCard>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
-        )}
-        
-        <div className="fixed bottom-2 right-2 md:bottom-4 md:right-4 backdrop-blur-xl bg-white/[0.03] px-2 md:px-4 py-1 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-sm text-white/30 border border-white/[0.08]">
-          🔄 Auto-opdatering
         </div>
       </div>
       
-      {/* Live Activity Feed */}
+      {/* Activity Feed */}
       <ActivityFeed activities={recentSales} data={data} />
       
       {/* CSS Animations */}
       <style jsx global>{`
-        /* Animated Gradient Background */
         .bg-gradient-animate {
-          background: linear-gradient(-45deg, 
-            #0f172a, #1e1b4b, #0f172a, #134e4a, 
-            #0f172a, #1e1b4b, #0f172a);
+          background: linear-gradient(-45deg, #0f172a, #1e1b4b, #0f172a, #134e4a, #0f172a, #1e1b4b, #0f172a);
           background-size: 400% 400%;
           animation: gradient-shift 15s ease infinite;
         }
-        
         @keyframes gradient-shift {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
         }
-        
-        /* Confetti Animation */
         .confetti-piece {
-          position: absolute;
-          width: 10px;
-          height: 10px;
-          top: -10px;
+          position: absolute; width: 10px; height: 10px; top: -10px;
           animation: confetti-fall 3s ease-out forwards;
         }
-        
         @keyframes confetti-fall {
-          0% {
-            transform: translateY(0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(100vh) rotate(720deg);
-            opacity: 0;
-          }
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
         }
-        
-        /* Fire Animation */
         @keyframes fire-flicker {
           0%, 100% { transform: scale(1) rotate(-5deg); }
           25% { transform: scale(1.1) rotate(5deg); }
@@ -956,100 +593,46 @@ export default function TVDashboard() {
           75% { transform: scale(1.15) rotate(3deg); }
         }
         .animate-fire { animation: fire-flicker 0.5s ease-in-out infinite; }
-        
-        /* Fist Pump Animation - punches in place */
-        @keyframes fist-pump {
-          0%, 100% { transform: translateX(0) rotate(0deg) scale(1); }
-          25% { transform: translateX(15px) rotate(-20deg) scale(1.3); }
-          50% { transform: translateX(0) rotate(0deg) scale(1); }
-          75% { transform: translateX(15px) rotate(-20deg) scale(1.3); }
-        }
-        .animate-fist-pump { animation: fist-pump 0.6s ease-in-out infinite; }
-        
-        /* Head Shake Animation - angry boss shaking head */
-        @keyframes head-shake {
-          0%, 100% { transform: rotate(0deg); }
-          20% { transform: rotate(-8deg); }
-          40% { transform: rotate(8deg); }
-          60% { transform: rotate(-8deg); }
-          80% { transform: rotate(8deg); }
-        }
-        .animate-head-shake { animation: head-shake 0.5s ease-in-out infinite; }
-        
-        /* Bounce In Animation */
         @keyframes bounce-in {
           0% { transform: scale(0); opacity: 0; }
           50% { transform: scale(1.2); }
           100% { transform: scale(1); opacity: 1; }
         }
         .animate-bounce-in { animation: bounce-in 0.4s ease-out; }
-        
-        /* Slide In Up Animation */
         @keyframes slide-in-up {
-          0% { transform: translate(-50%, 100px); opacity: 0; }
-          100% { transform: translate(-50%, 0); opacity: 1; }
+          0% { transform: translateY(20px); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
         }
         .animate-slide-in-up { animation: slide-in-up 0.5s ease-out; }
-        
-        /* Particle Effects */
         .particle {
-          position: absolute;
-          width: 4px;
-          height: 4px;
-          background: rgba(255, 255, 255, 0.3);
-          border-radius: 50%;
+          position: absolute; width: 4px; height: 4px;
+          background: rgba(255, 255, 255, 0.3); border-radius: 50%;
           animation: particle-float 20s infinite linear;
         }
-        
         .particle-1 { left: 10%; top: 20%; animation-delay: 0s; animation-duration: 25s; }
-        .particle-2 { left: 20%; top: 80%; animation-delay: -5s; animation-duration: 20s; }
-        .particle-3 { left: 35%; top: 50%; animation-delay: -10s; animation-duration: 28s; }
-        .particle-4 { left: 50%; top: 30%; animation-delay: -7s; animation-duration: 22s; }
-        .particle-5 { left: 65%; top: 70%; animation-delay: -3s; animation-duration: 26s; }
-        .particle-6 { left: 80%; top: 40%; animation-delay: -12s; animation-duration: 24s; }
-        .particle-7 { left: 90%; top: 60%; animation-delay: -8s; animation-duration: 21s; }
-        .particle-8 { left: 45%; top: 10%; animation-delay: -15s; animation-duration: 27s; }
-        
+        .particle-2 { left: 30%; top: 80%; animation-delay: -5s; animation-duration: 20s; }
+        .particle-3 { left: 60%; top: 50%; animation-delay: -10s; animation-duration: 28s; }
+        .particle-4 { left: 85%; top: 30%; animation-delay: -7s; animation-duration: 22s; }
         @keyframes particle-float {
-          0% {
-            transform: translateY(100vh) rotate(0deg);
-            opacity: 0;
-          }
+          0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
           10% { opacity: 0.6; }
           90% { opacity: 0.6; }
-          100% {
-            transform: translateY(-100vh) rotate(720deg);
-            opacity: 0;
-          }
+          100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
         }
-        
-        /* Enhanced floating animations */
         @keyframes float-slow {
           0%, 100% { transform: translateY(0) translateX(0) scale(1); }
-          25% { transform: translateY(-15px) translateX(10px) scale(1.02); }
           50% { transform: translateY(-25px) translateX(5px) scale(1); }
-          75% { transform: translateY(-10px) translateX(-5px) scale(0.98); }
         }
         @keyframes float-slow-reverse {
           0%, 100% { transform: translateY(0) translateX(0) scale(1); }
-          25% { transform: translateY(15px) translateX(-10px) scale(0.98); }
           50% { transform: translateY(25px) translateX(-5px) scale(1); }
-          75% { transform: translateY(10px) translateX(5px) scale(1.02); }
         }
-        @keyframes float-medium {
-          0%, 100% { transform: translateY(0) scale(1); }
-          50% { transform: translateY(-20px) scale(1.05); }
-        }
-        
-        /* Pulse glow for orbs */
         @keyframes pulse-glow {
           0%, 100% { opacity: 0.5; transform: scale(1); }
           50% { opacity: 0.8; transform: scale(1.1); }
         }
         .animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
         .animate-pulse-glow-delayed { animation: pulse-glow 4s ease-in-out infinite 2s; }
-        
-        /* Card and element animations */
         @keyframes fade-in {
           from { opacity: 0; transform: translateY(-10px); }
           to { opacity: 1; transform: translateY(0); }
@@ -1064,21 +647,18 @@ export default function TVDashboard() {
         }
         @keyframes glow {
           0%, 100% { text-shadow: 0 0 10px rgba(52, 211, 153, 0.5); }
-          50% { text-shadow: 0 0 25px rgba(52, 211, 153, 0.9), 0 0 40px rgba(52, 211, 153, 0.5), 0 0 60px rgba(52, 211, 153, 0.3); }
+          50% { text-shadow: 0 0 25px rgba(52, 211, 153, 0.9), 0 0 40px rgba(52, 211, 153, 0.5); }
         }
         @keyframes pulse-subtle {
           0%, 100% { opacity: 1; box-shadow: 0 0 10px currentColor; }
           50% { opacity: 0.85; box-shadow: 0 0 20px currentColor; }
         }
-        
         .animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
         .animate-float-slow-reverse { animation: float-slow-reverse 10s ease-in-out infinite; }
-        .animate-float-medium { animation: float-medium 6s ease-in-out infinite; }
         .animate-fade-in { animation: fade-in 0.6s ease-out; }
         .animate-fade-in-delayed { animation: fade-in 0.6s ease-out 0.3s both; }
         .animate-slide-up { animation: slide-up 0.6s ease-out; }
         .animate-slide-up-delayed { animation: slide-up 0.6s ease-out 0.15s both; }
-        .animate-slide-up-more-delayed { animation: slide-up 0.6s ease-out 0.3s both; }
         .animate-bounce-subtle { animation: bounce-subtle 2s ease-in-out infinite; }
         .animate-glow { animation: glow 2s ease-in-out infinite; }
         .animate-pulse-subtle { animation: pulse-subtle 3s ease-in-out infinite; }

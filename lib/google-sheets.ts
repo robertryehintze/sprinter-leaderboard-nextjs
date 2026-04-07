@@ -57,15 +57,24 @@ export async function appendSaleToSheet(rowData: any[]) {
 }
 
 // Salesperson aliases - maps various name formats to display name
+// Active sellers only — Frank removed (opsagt)
 const SALESPERSON_ALIASES: Record<string, string[]> = {
   'Niels': ['niels', 'niels larsen', 'larsen'],
   'Robert': ['robert', 'robert hintze', 'hintze'],
   'Søgaard': ['søgaard', 'michael søgaard', 'michael'],
-  'Frank': ['frank', 'vilholdt', 'vilholdt johansen', 'frank vilholdt', 'frank vilholdt johansen', 'vilholt', 'vilholt-johannsen', 'fvj'],
   'Jeppe': ['jeppe', 'jeppe ellebæk', 'ellebæk'],
   'Kristofer': ['kristofer', 'kristofer kripalani', 'kripalani'],
-  'Søren': ['søren', 'søren nielsen', 'nielsen'],
+  'Søren': ['søren', 'søren nielsen', 'nielsen', 'sn'],
 };
+
+// Historical sellers — for matching old data (not shown on active leaderboard)
+const HISTORICAL_ALIASES: Record<string, string[]> = {
+  'Frank': ['frank', 'vilholdt', 'vilholdt johansen', 'frank vilholdt', 'frank vilholdt johansen', 'vilholt', 'vilholt-johannsen', 'fvj'],
+  'Johnsen': ['johnsen', 'mikael johnsen'],
+};
+
+// Combined aliases for data matching (includes historical)
+const ALL_ALIASES: Record<string, string[]> = { ...SALESPERSON_ALIASES, ...HISTORICAL_ALIASES };
 
 // Get display names for salespeople
 const SALESPEOPLE = Object.keys(SALESPERSON_ALIASES);
@@ -75,9 +84,9 @@ function matchSalesperson(sellerName: string | undefined | null): string | null 
   if (!sellerName) return null;
   const normalized = sellerName.toString().toLowerCase().trim();
   
-  for (const [displayName, aliases] of Object.entries(SALESPERSON_ALIASES)) {
+  // Match against all aliases (active + historical) for data integrity
+  for (const [displayName, aliases] of Object.entries(ALL_ALIASES)) {
     for (const alias of aliases) {
-      // Check if the normalized name contains the alias or vice versa
       if (normalized.includes(alias) || alias.includes(normalized)) {
         return displayName;
       }
@@ -149,7 +158,7 @@ export async function fetchDashboardData(timePeriod: 'daily' | 'monthly' | 'year
     db: salesData[name].db,
     meetings: salesData[name].meetings,
     retention: salesData[name].retention,
-    goalProgress: (salesData[name].db / 100000) * 100,
+    goalProgress: (salesData[name].db / 200000) * 100,
   })).sort((a, b) => b.db - a.db);
   
   return {
@@ -229,11 +238,11 @@ export async function fetchHallOfFame() {
     if (meeting === 'JA') monthlyData[monthKey][matchedSeller].meetings += 1;
   });
   
-  // Calculate winners for each month
+  // Calculate top 2 for each month
   const monthNames: Record<string, string> = {
-    '01': 'Januar', '02': 'Februar', '03': 'Marts', '04': 'April',
-    '05': 'Maj', '06': 'Juni', '07': 'Juli', '08': 'August',
-    '09': 'September', '10': 'Oktober', '11': 'November', '12': 'December'
+    '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr',
+    '05': 'Maj', '06': 'Jun', '07': 'Jul', '08': 'Aug',
+    '09': 'Sep', '10': 'Okt', '11': 'Nov', '12': 'Dec'
   };
   
   const hallOfFame = Object.entries(monthlyData)
@@ -241,32 +250,102 @@ export async function fetchHallOfFame() {
       const [year, month] = monthKey.split('-');
       const monthName = monthNames[month] || month;
       
-      // Find DB winner
-      let dbWinner = { name: '', db: 0 };
-      let meetingsWinner = { name: '', meetings: 0 };
+      // Sort all sellers by DB descending
+      const sorted = Object.entries(sellers)
+        .map(([name, data]) => ({ name, db: data.db }))
+        .filter(s => s.db > 0)
+        .sort((a, b) => b.db - a.db);
       
-      Object.entries(sellers).forEach(([name, data]) => {
-        if (data.db > dbWinner.db) {
-          dbWinner = { name, db: data.db };
-        }
-        if (data.meetings > meetingsWinner.meetings) {
-          meetingsWinner = { name, meetings: data.meetings };
-        }
-      });
+      const first = sorted[0] || { name: '-', db: 0 };
+      const second = sorted[1] || { name: '-', db: 0 };
       
       return {
         monthKey,
-        monthLabel: `${monthName} ${year}`,
-        dbWinner,
-        meetingsWinner,
+        monthLabel: `${monthName}`,
+        year,
+        first,
+        second,
       };
     })
-    .filter(m => m.dbWinner.db > 0 || m.meetingsWinner.meetings > 0)
-    .sort((a, b) => b.monthKey.localeCompare(a.monthKey)); // Most recent first
+    .filter(m => m.first.db > 0)
+    .sort((a, b) => a.monthKey.localeCompare(b.monthKey)); // Chronological order
   
   return hallOfFame;
 }
 
+
+// Fetch monthly DB breakdown per seller for the current year
+export async function fetchYearlyBreakdown() {
+  const sheets = await getAuthenticatedSheetsClient();
+  
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: 'SALG (INPUT) v2!A2:N1000',
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  
+  const rows = response.data.values || [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  
+  // Initialize: 12 months x active sellers
+  const monthlyDb: Record<string, number[]> = {};
+  SALESPEOPLE.forEach(name => {
+    monthlyDb[name] = new Array(12).fill(0);
+  });
+  
+  rows.forEach((row) => {
+    const dateValue = row[0];
+    const seller = row[1];
+    const dbValue = row[10];
+    
+    let rowDate: Date;
+    if (typeof dateValue === 'number') {
+      if (dateValue < 36526) return;
+      rowDate = new Date((dateValue - 25569) * 86400 * 1000);
+    } else if (typeof dateValue === 'string') {
+      const parts = dateValue.split('-');
+      if (parts.length === 3) {
+        rowDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      } else return;
+    } else return;
+    
+    if (rowDate.getFullYear() !== currentYear) return;
+    
+    const matchedSeller = matchSalesperson(seller);
+    if (!matchedSeller || !monthlyDb[matchedSeller]) return;
+    
+    let db = 0;
+    if (typeof dbValue === 'number') {
+      db = dbValue;
+    } else if (typeof dbValue === 'string') {
+      const cleanValue = dbValue.replace(/kr\s*/i, '').replace(/\./g, '').replace(',', '.');
+      db = parseFloat(cleanValue) || 0;
+    }
+    
+    const monthIndex = rowDate.getMonth();
+    monthlyDb[matchedSeller][monthIndex] += db;
+  });
+  
+  // Build result: per seller, total YTD, and monthly array
+  const YEARLY_GOAL = 2400000;
+  const MONTHLY_GOAL = 200000;
+  
+  const sellers = SALESPEOPLE.map(name => {
+    const months = monthlyDb[name];
+    const ytd = months.reduce((sum, v) => sum + v, 0);
+    return {
+      name,
+      months, // array of 12 monthly DB values
+      ytd,
+      yearlyGoal: YEARLY_GOAL,
+      yearlyProgress: (ytd / YEARLY_GOAL) * 100,
+      monthlyGoal: MONTHLY_GOAL,
+    };
+  }).sort((a, b) => b.ytd - a.ytd);
+  
+  return { sellers, year: currentYear };
+}
 
 // Get all existing order IDs from the sheet (for duplicate checking)
 export async function getExistingOrderIds(): Promise<Set<string>> {
@@ -683,12 +762,12 @@ export async function fetchRecentSales(limit: number = 10) {
 
 // Default goals for each salesperson (can be overridden via admin)
 const DEFAULT_GOALS: Record<string, number> = {
-  'Niels': 100000,
-  'Robert': 100000,
-  'Søgaard': 100000,
-  'Frank': 100000,
-  'Jeppe': 100000,
-  'Kristofer': 100000,
+  'Niels': 200000,
+  'Robert': 200000,
+  'Søgaard': 200000,
+  'Jeppe': 200000,
+  'Kristofer': 200000,
+  'Søren': 200000,
 };
 
 // Calculate workdays (Monday-Friday) in a given month
@@ -917,7 +996,7 @@ export async function fetchDashboardDataWithBudget(timePeriod: 'daily' | 'monthl
   
   // Add budget info to each person (both DB and meetings)
   const leaderboardWithBudget = dashboardData.leaderboard.map(person => {
-    const monthlyGoal = goals[person.name] || DEFAULT_GOALS[person.name] || 100000;
+    const monthlyGoal = goals[person.name] || DEFAULT_GOALS[person.name] || 200000;
     const budgetInfo = getWorkdayBudgetInfo(person.db, monthlyGoal);
     const meetingsBudgetInfo = getMeetingsBudgetInfo(person.meetings);
     
