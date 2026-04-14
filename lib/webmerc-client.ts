@@ -2,6 +2,78 @@
 
 const BROWSERLESS_API = 'https://production-sfo.browserless.io';
 
+// Helper: build the login + navigation preamble for all scripts
+function buildLoginScript(site: string, username: string, password: string): string {
+  return `
+    debugLogs.push('Navigating to login page...');
+    await page.goto(WEBMERC_BASE_URL + '/admin/', { waitUntil: 'networkidle0', timeout: 30000 });
+    
+    debugLogs.push('Typing credentials...');
+    await page.type('input[name="Site"]', '${site}');
+    await page.type('input[name="Login"]', '${username}');
+    await page.type('input[name="Password"]', '${password}');
+    
+    debugLogs.push('Clicking login button...');
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }).catch(e => {
+        debugLogs.push('Nav wait error (non-fatal): ' + e.message);
+      }),
+      page.click('input[type="image"]')
+    ]);
+    
+    await new Promise(r => setTimeout(r, 2000));
+    
+    const currentUrl = page.url();
+    const pageTitle = await page.title();
+    const hasLoginForm = await page.evaluate(() => {
+      return !!document.querySelector('input[name="Password"]');
+    });
+    
+    debugLogs.push('After login - URL: ' + currentUrl + ', Title: ' + pageTitle + ', hasLoginForm: ' + hasLoginForm);
+    
+    if (hasLoginForm || pageTitle.toLowerCase().includes('login')) {
+      const errorText = await page.evaluate(() => {
+        return document.body.innerText.substring(0, 300);
+      });
+      return { 
+        data: { success: false, found: false, message: 'LOGIN FAILED. Body: ' + errorText, debug: debugLogs }, 
+        type: 'application/json' 
+      };
+    }
+  `;
+}
+
+// Helper: build the checkbox + submit preamble for order list
+function buildCheckboxScript(): string {
+  return `
+    const checkboxResult = await page.evaluate(() => {
+      const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
+      let changed = 0;
+      for (const cb of allCheckboxes) {
+        if (!cb.checked) {
+          cb.click();
+          changed++;
+        }
+      }
+      return changed;
+    });
+    
+    debugLogs.push('Checked ' + checkboxResult + ' checkboxes');
+    
+    if (checkboxResult > 0) {
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {}),
+        page.evaluate(() => {
+          const form = document.querySelector('form');
+          if (form) form.submit();
+        })
+      ]);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  `;
+}
+
+
 export interface WebmercOrderData {
   orderId: string;
   customer: string;
@@ -19,79 +91,21 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     throw new Error('Missing Webmerc/Browserless credentials');
   }
 
-  // Use Browserless /function API with Puppeteer syntax
+  const loginPart = buildLoginScript(site, username, password);
+  const checkboxPart = buildCheckboxScript();
+
   const script = `export default async function ({ page }) {
   const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
-  const orderId = '${orderId}';
-  const site = '${site}';
-  const username = '${username}';
-  const password = '${password}';
+  const debugLogs = [];
   
   try {
-    // Login
-    await page.goto(WEBMERC_BASE_URL + '/admin/', { waitUntil: 'networkidle0', timeout: 30000 });
-    await page.type('input[name="Site"]', site);
-    await page.type('input[name="Login"]', username);
-    await page.type('input[name="Password"]', password);
-    await page.click('input[type="image"]');
-    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
-    
-    // Verify login succeeded - check if we're still on login page
-    const currentUrl = page.url();
-    const pageTitle = await page.title();
-    const hasLoginForm = await page.evaluate(() => {
-      return !!document.querySelector('input[name="Password"]');
-    });
-    
-    if (hasLoginForm || pageTitle.toLowerCase().includes('login')) {
-      return { data: { found: false, message: 'Login failed - still on login page. URL: ' + currentUrl + ', Title: ' + pageTitle }, type: 'application/json' };
-    }
+    ${loginPart}
     
     // Go to order list
+    debugLogs.push('Navigating to order list...');
     await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0', timeout: 30000 });
     
-    // Enable ALL order status checkboxes
-    const checkboxesChanged = await page.evaluate(() => {
-      const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
-      let changed = false;
-      for (const checkbox of allCheckboxes) {
-        const parent = checkbox.parentElement;
-        const nearbyText = parent?.textContent?.toLowerCase() || '';
-        const nextSibling = checkbox.nextSibling?.textContent?.toLowerCase() || '';
-        const labelText = nearbyText + ' ' + nextSibling;
-        const isStatusCheckbox = 
-          labelText.includes('under behandling') ||
-          labelText.includes('faktura') ||
-          labelText.includes('betalt') ||
-          labelText.includes('bestilt') ||
-          labelText.includes('sendt');
-        if (isStatusCheckbox && !checkbox.checked) {
-          checkbox.click();
-          changed = true;
-        }
-      }
-      return changed;
-    });
-    
-    if (checkboxesChanged) {
-      const submitted = await page.evaluate(() => {
-        const buttons = document.querySelectorAll('input[type="image"], input[type="submit"], button');
-        for (const btn of buttons) {
-          const src = btn.getAttribute('src') || '';
-          const value = btn.getAttribute('value') || '';
-          if (src.includes('LookUp') || src.includes('search') || value.toLowerCase().includes('søg') || value.toLowerCase().includes('search')) {
-            btn.click();
-            return true;
-          }
-        }
-        const form = document.querySelector('form');
-        if (form) { form.submit(); return true; }
-        return false;
-      });
-      if (submitted) {
-        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {});
-      }
-    }
+    ${checkboxPart}
     
     // Search for order in the table
     const orderData = await page.evaluate((targetOrderId) => {
@@ -110,16 +124,23 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
         }
       }
       return { found: false };
-    }, orderId);
+    }, '${orderId}');
     
     if (!orderData.found) {
-      return { data: { found: false, message: 'Order not found in list' }, type: 'application/json' };
+      return { data: { found: false, message: 'Order not found in list', debug: debugLogs }, type: 'application/json' };
     }
     
     // Get salesrep from detail page
     await page.goto(orderData.orderLink, { waitUntil: 'networkidle0', timeout: 30000 });
     
     const salesrep = await page.evaluate(() => {
+      // Try to find the SalesRep select field
+      const select = document.querySelector('select[name="SalesRepID"]');
+      if (select) {
+        const selected = select.querySelector('option[selected]');
+        if (selected) return selected.textContent?.trim() || 'Unknown';
+      }
+      // Fallback: look for "Placed by" text
       const allText = document.body.innerText;
       const placedByMatch = allText.match(/Placed by:\\s*([^\\n]+)/);
       return placedByMatch ? placedByMatch[1].trim() : 'Unknown';
@@ -128,12 +149,14 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     return {
       data: {
         found: true,
-        order: { orderId: '${orderId}', customer: orderData.customer, db: orderData.db, salesrep }
+        order: { orderId: '${orderId}', customer: orderData.customer, db: orderData.db, salesrep },
+        debug: debugLogs
       },
       type: 'application/json'
     };
   } catch (error) {
-    return { data: { found: false, message: 'lookupOrder error: ' + error.message }, type: 'application/json' };
+    debugLogs.push('FATAL ERROR: ' + error.message);
+    return { data: { found: false, message: error.message, debug: debugLogs }, type: 'application/json' };
   }
 }`;
 
@@ -156,6 +179,7 @@ export async function lookupOrder(orderId: string): Promise<WebmercOrderData | n
     return result.data.order;
   }
   
+  console.error('lookupOrder failed:', result.data?.message, result.data?.debug);
   return null;
 }
 
@@ -178,146 +202,33 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
     throw new Error('Missing Webmerc/Browserless credentials');
   }
 
-  // Use Browserless /function API with Puppeteer syntax
-  // Table structure:
-  // Column 0: # (order ID link)
-  // Column 1: Distributør# (another link with order ID)
-  // Column 2: Kunde (customer)
-  // Column 3: Ordre dato
-  // Column 4: Betaling
-  // Column 5: Status
-  // Column 6: Ordresum
-  // Column 7: Fortjeneste (DB)
-  // Column 8: Fortjeneste%
+  const loginPart = buildLoginScript(site, username, password);
+  const checkboxPart = buildCheckboxScript();
+
   const script = `export default async function ({ page }) {
   const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
-  const site = '${site}';
-  const username = '${username}';
-  const password = '${password}';
   const debugLogs = [];
   
   try {
-    // Login
-    debugLogs.push('Navigating to login page...');
-    await page.goto(WEBMERC_BASE_URL + '/admin/', { waitUntil: 'networkidle0', timeout: 30000 });
+    ${loginPart}
     
-    debugLogs.push('Typing credentials: site=' + site + ', username=' + username);
-    await page.type('input[name="Site"]', site);
-    await page.type('input[name="Login"]', username);
-    await page.type('input[name="Password"]', password);
-    
-    debugLogs.push('Clicking login button...');
-    await page.click('input[type="image"]');
-    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
-    
-    // CRITICAL: Verify login succeeded
-    const currentUrl = page.url();
-    const pageTitle = await page.title();
-    const hasLoginForm = await page.evaluate(() => {
-      return !!document.querySelector('input[name="Password"]');
-    });
-    const bodyText = await page.evaluate(() => {
-      return document.body.innerText.substring(0, 500);
-    });
-    
-    debugLogs.push('After login - URL: ' + currentUrl + ', Title: ' + pageTitle + ', hasLoginForm: ' + hasLoginForm);
-    
-    if (hasLoginForm || pageTitle.toLowerCase().includes('login')) {
-      return { 
-        data: { 
-          success: false, 
-          message: 'LOGIN FAILED - still on login page. URL: ' + currentUrl + ', Title: ' + pageTitle + ', Body: ' + bodyText.substring(0, 200),
-          orders: [],
-          debug: debugLogs
-        }, 
-        type: 'application/json' 
-      };
-    }
-    
-    // Go to order list
+    // Navigate to order list
     debugLogs.push('Navigating to order list...');
     await page.goto(WEBMERC_BASE_URL + '/admin/listorder.asp', { waitUntil: 'networkidle0', timeout: 30000 });
     
-    // Verify we're on the order list page (not redirected to login)
-    const orderPageTitle = await page.title();
+    // Verify we're on the order list page
     const orderPageHasLogin = await page.evaluate(() => {
       return !!document.querySelector('input[name="Password"]');
     });
     
-    debugLogs.push('Order list page - Title: ' + orderPageTitle + ', hasLoginForm: ' + orderPageHasLogin);
-    
     if (orderPageHasLogin) {
       return { 
-        data: { 
-          success: false, 
-          message: 'Session lost - redirected to login on order list page',
-          orders: [],
-          debug: debugLogs
-        }, 
+        data: { success: false, message: 'Session lost on order list page', orders: [], debug: debugLogs }, 
         type: 'application/json' 
       };
     }
     
-    // Enable ALL order status checkboxes
-    const checkboxInfo = await page.evaluate(() => {
-      const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
-      const info = [];
-      let changed = false;
-      
-      for (const checkbox of allCheckboxes) {
-        const parent = checkbox.parentElement;
-        const nearbyText = parent?.textContent?.toLowerCase() || '';
-        const nextSibling = checkbox.nextSibling?.textContent?.toLowerCase() || '';
-        const labelText = nearbyText + ' ' + nextSibling;
-        const isStatusCheckbox = 
-          labelText.includes('under behandling') ||
-          labelText.includes('faktura') ||
-          labelText.includes('betalt') ||
-          labelText.includes('bestilt') ||
-          labelText.includes('sendt');
-        
-        info.push({ label: labelText.trim().substring(0, 50), checked: checkbox.checked, isStatus: isStatusCheckbox });
-        
-        if (isStatusCheckbox && !checkbox.checked) {
-          checkbox.click();
-          changed = true;
-        }
-      }
-      
-      return { changed, checkboxes: info };
-    });
-    
-    debugLogs.push('Checkboxes: ' + JSON.stringify(checkboxInfo));
-    
-    // If checkboxes were changed, submit the form to refresh the list
-    if (checkboxInfo.changed) {
-      debugLogs.push('Submitting form after checkbox change...');
-      const submitted = await page.evaluate(() => {
-        const buttons = document.querySelectorAll('input[type="image"], input[type="submit"], button');
-        for (const btn of buttons) {
-          const src = btn.getAttribute('src') || '';
-          const value = btn.getAttribute('value') || '';
-          if (src.includes('LookUp') || src.includes('search') || value.toLowerCase().includes('søg') || value.toLowerCase().includes('search')) {
-            btn.click();
-            return 'clicked: ' + (src || value);
-          }
-        }
-        const form = document.querySelector('form');
-        if (form) {
-          form.submit();
-          return 'form.submit()';
-        }
-        return 'nothing found to submit';
-      });
-      
-      debugLogs.push('Submit result: ' + submitted);
-      
-      if (submitted !== 'nothing found to submit') {
-        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch((e) => {
-          debugLogs.push('Navigation wait failed: ' + e.message);
-        });
-      }
-    }
+    ${checkboxPart}
     
     // Extract all orders from all pages
     let allOrders = [];
@@ -363,7 +274,7 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
         for (const link of links) {
           const text = link.textContent?.trim().toLowerCase() || '';
           const href = link.href || '';
-          if ((text.includes('næste') || text.includes('next') || text === '>>' || text === '>') && href.includes('listorder')) {
+          if ((text.includes('next') || text === '>>' || text === '>') && href.includes('listorder')) {
             link.click();
             return true;
           }
@@ -408,14 +319,12 @@ export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
     return result.data.orders;
   }
   
-  // Log the debug info and error message for troubleshooting
   console.error('Failed to fetch orders:', result.data?.message);
   if (result.data?.debug) {
     console.error('Debug logs:', result.data.debug);
   }
   
-  // Throw error instead of silently returning empty - so the sync route can report it
-  throw new Error(`Webmerc fetch failed: ${result.data?.message || 'Unknown error'}. Debug: ${JSON.stringify(result.data?.debug || [])}`);
+  throw new Error(`Webmerc fetch failed: ${result.data?.message || 'Unknown error'}`);
 }
 
 
@@ -438,33 +347,24 @@ export async function checkCustomerRetention(customerName: string): Promise<Rete
   }
 
   const escapedCustomerName = customerName.replace(/'/g, "\\'").replace(/"/g, '\\"');
+  const loginPart = buildLoginScript(site, username, password);
 
   const script = `export default async function ({ page }) {
   const WEBMERC_BASE_URL = 'https://admin.webmercs.com';
   const customerName = '${escapedCustomerName}';
-  const site = '${site}';
-  const username = '${username}';
-  const password = '${password}';
+  const debugLogs = [];
   
   try {
-    // Login
-    await page.goto(WEBMERC_BASE_URL + '/admin/', { waitUntil: 'networkidle0', timeout: 30000 });
-    await page.type('input[name="Site"]', site);
-    await page.type('input[name="Login"]', username);
-    await page.type('input[name="Password"]', password);
-    await page.click('input[type="image"]');
-    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
+    ${loginPart}
     
-    // Verify login
-    const hasLoginForm = await page.evaluate(() => !!document.querySelector('input[name="Password"]'));
-    if (hasLoginForm) {
-      return { data: { isRetention: false, previousOrderDate: null, previousOrderCount: 0, daysSinceLastOrder: null, message: 'Login failed' }, type: 'application/json' };
-    }
-    
+    // Go to customer list
     await page.goto(WEBMERC_BASE_URL + '/admin/listcustomer.asp', { waitUntil: 'networkidle0', timeout: 30000 });
     await page.type('input[name="Firma"]', customerName);
-    await page.click('input[type="image"][src*="LookUp"]');
-    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
+    
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {}),
+      page.click('input[type="image"][src*="LookUp"]')
+    ]);
     
     const customerLink = await page.evaluate((searchName) => {
       const links = document.querySelectorAll('table a');
