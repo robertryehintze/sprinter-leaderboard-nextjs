@@ -141,7 +141,7 @@ const AnimatedProgressBar = ({ progress, isLeader, color = 'teal' }: { progress:
   };
   
   return (
-    <div className="w-full bg-white/[0.06] rounded-full h-2 overflow-hidden">
+    <div className="w-full bg-white/[0.06] rounded-full h-3 overflow-hidden">
       <div
         className={`h-full rounded-full bg-gradient-to-r ${colorMap[color] || colorMap.teal} transition-all duration-1000 ease-out ${isLeader ? 'animate-pulse-subtle' : ''}`}
         style={{ width: `${clampedProgress}%` }}
@@ -166,7 +166,7 @@ const MiniBarChart = ({ months, monthlyGoal }: { months: number[]; monthlyGoal: 
   const labels = ['J','F','M','A','M','J'];
   
   return (
-    <div className="flex items-end gap-[2px] h-[32px]">
+    <div className="flex items-end gap-[2px] h-[40px]">
       {months.map((val, i) => {
         // i maps directly to fiscal month index (0=Jan, 5=Jun)
         const isFuture = i > currentMonthIdx;
@@ -231,7 +231,7 @@ const ActivityFeed = ({ activities, data }: { activities: { name: string; amount
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40">
       <div className="bg-gradient-to-r from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl border-t border-white/10 px-6 py-3">
-        <div className="flex items-center justify-center gap-3 text-sm">
+        <div className="flex items-center justify-center gap-3 text-lg">
           {showMotivational && motivationalMessage ? (
             <span className="text-amber-300 font-semibold animate-slide-in-up">{motivationalMessage}</span>
           ) : current ? (
@@ -394,7 +394,7 @@ export default function TVDashboard() {
       <div className="relative z-10 flex flex-col flex-1 min-h-0">
         {/* Header - compact */}
         <div className="flex justify-between items-center mb-3 animate-fade-in">
-          <h1 className="text-3xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
+          <h1 className="text-4xl font-bold text-white/95 tracking-tight">🏆 Sprinter Leaderboard</h1>
           <div className="flex items-center gap-3">
             <Link href="/input" className="px-4 py-2 bg-white/10 backdrop-blur-xl border border-white/20 text-white rounded-xl font-semibold hover:bg-white/15 transition-all text-sm">
               ➕ Tilføj Salg
@@ -414,27 +414,27 @@ export default function TVDashboard() {
             <Link href="/admin" className="px-4 py-2 bg-slate-500/10 backdrop-blur-xl border border-slate-400/20 text-slate-300 rounded-xl font-semibold hover:bg-slate-500/20 transition-all text-sm">
               ⚙️
             </Link>
-            <div className="text-xs text-white/40">{lastUpdated.toLocaleTimeString('da-DK')}</div>
+            <div className="text-sm text-white/40">{lastUpdated.toLocaleTimeString('da-DK')}</div>
           </div>
         </div>
         
         {/* Summary Stats Row */}
         <div className="grid grid-cols-3 gap-3 mb-3 animate-fade-in">
           <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-teal-400/15">
-            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Total DB {currentMonth}</div>
-            <div className="text-2xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">
+            <div className="text-white/40 text-sm mb-1 font-medium tracking-wide">Total DB {currentMonth}</div>
+            <div className="text-4xl font-bold bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">
               <AnimatedNumber value={data.totalDb} suffix=" kr" />
             </div>
           </div>
           <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-indigo-400/15">
-            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Team {yearlyData?.fiscalPeriod || 'H1'} {yearlyData?.year || 2026} / {(TEAM_HALF_YEAR_BUDGET / 1000000).toFixed(0)}M</div>
-            <div className="text-2xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
+            <div className="text-white/40 text-sm mb-1 font-medium tracking-wide">Team {yearlyData?.fiscalPeriod || 'H1'} {yearlyData?.year || 2026} / {(TEAM_HALF_YEAR_BUDGET / 1000000).toFixed(0)}M</div>
+            <div className="text-4xl font-bold bg-gradient-to-r from-indigo-300 to-violet-200 bg-clip-text text-transparent">
               <AnimatedNumber value={(yearlyData?.sellers.reduce((s, v) => s + v.ytd, 0) || 0) + (yearlyData?.formerSellers?.ytd || 0)} suffix=" kr" />
             </div>
           </div>
           <div className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 text-center border border-amber-400/15">
-            <div className="text-white/40 text-[10px] mb-1 font-medium tracking-wide">Retention</div>
-            <div className="text-2xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">
+            <div className="text-white/40 text-sm mb-1 font-medium tracking-wide">Retention</div>
+            <div className="text-4xl font-bold bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">
               <AnimatedNumber value={data.totalRetention} suffix=" kr" />
             </div>
           </div>
@@ -445,7 +445,7 @@ export default function TVDashboard() {
           
           {/* LEFT COLUMN: DB Leaderboard - Current Month */}
           <div className="backdrop-blur-xl bg-teal-500/[0.06] rounded-2xl p-4 border border-teal-400/20 shadow-[0_0_40px_rgba(20,184,166,0.08)] animate-slide-up flex flex-col min-h-0">
-            <h2 className="text-lg font-semibold mb-2 text-teal-200/90 tracking-wide">💰 DB Leaderboard — {currentMonth}</h2>
+            <h2 className="text-2xl font-semibold mb-2 text-teal-200/90 tracking-wide">💰 DB Leaderboard — {currentMonth}</h2>
             <div className="space-y-2 overflow-hidden flex-1" key={`db-${dataKey}`}>
               {data.leaderboard.map((person, index) => {
                 const monthlyGoal = person.monthlyGoal || DB_GOAL;
@@ -458,16 +458,16 @@ export default function TVDashboard() {
                   <AnimatedCard key={person.name} index={index} className={`p-3 rounded-xl relative ${getCardStyle(index)}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 flex-1">
-                        <div className={`text-2xl font-bold w-10 text-center ${index === 0 ? 'animate-bounce-subtle' : ''}`}>
+                        <div className={`text-3xl font-bold w-12 text-center ${index === 0 ? 'animate-bounce-subtle' : ''}`}>
                           {getMedal(index)}
                         </div>
                         <div>
-                          <div className="text-base font-semibold text-white/95 flex items-center gap-1">
+                          <div className="text-xl font-semibold text-white/95 flex items-center gap-1">
                             {person.name}
                             {onFire && <FireIcon animate={true} />}
                             <RankIndicator change={rankChanges[person.name] || 0} />
                           </div>
-                          <div className="text-[10px] text-white/40 font-medium">
+                          <div className="text-sm text-white/40 font-medium">
                             {isOverGoal ? (
                               <span className="text-emerald-400">{Math.round(person.goalProgress)}% af mål</span>
                             ) : (
@@ -477,7 +477,7 @@ export default function TVDashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className={`text-xl font-bold ${isOverGoal ? 'text-emerald-400 animate-glow' : 'text-white/95'}`}>
+                        <div className={`text-2xl font-bold ${isOverGoal ? 'text-emerald-400 animate-glow' : 'text-white/95'}`}>
                           <AnimatedNumber value={person.db} suffix=" kr" />
                         </div>
                       </div>
@@ -496,7 +496,7 @@ export default function TVDashboard() {
             
             {/* Fiscal Half-Year Budget Section */}
             <div className="backdrop-blur-xl bg-indigo-500/[0.06] rounded-2xl p-4 border border-indigo-400/20 shadow-[0_0_40px_rgba(99,102,241,0.08)] animate-slide-up-delayed flex-1 min-h-0 flex flex-col">
-              <h2 className="text-lg font-semibold mb-2 text-indigo-200/90 tracking-wide">📊 Budget {yearlyData?.fiscalPeriod || 'H1'} {yearlyData?.year || 2026}</h2>
+              <h2 className="text-2xl font-semibold mb-2 text-indigo-200/90 tracking-wide">📊 Budget {yearlyData?.fiscalPeriod || 'H1'} {yearlyData?.year || 2026}</h2>
               <div className="space-y-2 overflow-hidden flex-1">
                 {(yearlyData?.sellers || []).map((seller, index) => {
                   const progressPct = Math.min(seller.yearlyProgress, 100);
@@ -511,9 +511,9 @@ export default function TVDashboard() {
                     <AnimatedCard key={seller.name} index={index} className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-3 border border-white/[0.08]">
                       <div className="flex items-center gap-3">
                         {/* Name + YTD */}
-                        <div className="w-[100px] shrink-0">
-                          <div className="text-sm font-semibold text-white/90">{seller.name}</div>
-                          <div className={`text-xs font-bold ${isAhead ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        <div className="w-[140px] shrink-0">
+                          <div className="text-lg font-semibold text-white/90">{seller.name}</div>
+                          <div className={`text-base font-bold ${isAhead ? 'text-emerald-400' : 'text-amber-400'}`}>
                             {seller.ytd.toLocaleString('da-DK')} kr
                           </div>
                         </div>
@@ -524,7 +524,7 @@ export default function TVDashboard() {
                         </div>
                         
                         {/* Progress circle */}
-                        <div className="w-[52px] h-[52px] shrink-0 relative">
+                        <div className="w-[60px] h-[60px] shrink-0 relative">
                           <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
                             <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
                             <circle
@@ -537,7 +537,7 @@ export default function TVDashboard() {
                             />
                           </svg>
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <span className={`text-[10px] font-bold ${isAhead ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            <span className={`text-sm font-bold ${isAhead ? 'text-emerald-400' : 'text-amber-400'}`}>
                               {Math.round(seller.yearlyProgress)}%
                             </span>
                           </div>
@@ -551,17 +551,17 @@ export default function TVDashboard() {
                 {yearlyData?.formerSellers && yearlyData.formerSellers.ytd > 0 && (
                   <div className="backdrop-blur-xl bg-white/[0.02] rounded-xl p-2 border border-white/[0.05]">
                     <div className="flex items-center gap-3">
-                      <div className="w-[100px] shrink-0">
-                        <div className="text-xs font-medium text-white/50">Tidl. sælgere</div>
-                        <div className="text-[10px] text-white/40">
+                      <div className="w-[140px] shrink-0">
+                        <div className="text-sm font-medium text-white/50">Tidl. sælgere</div>
+                        <div className="text-xs text-white/40">
                           {yearlyData.formerSellers.ytd.toLocaleString('da-DK')} kr
                         </div>
                       </div>
                       <div className="flex-1">
                         <MiniBarChart months={yearlyData.formerSellers.months} monthlyGoal={200000} />
                       </div>
-                      <div className="w-[52px] shrink-0 text-center">
-                        <span className="text-[10px] text-white/30">—</span>
+                      <div className="w-[60px] shrink-0 text-center">
+                        <span className="text-sm text-white/30">—</span>
                       </div>
                     </div>
                   </div>
@@ -572,26 +572,26 @@ export default function TVDashboard() {
             {/* Hall of Fame Section */}
             {hallOfFame.length > 0 && (
               <div className="backdrop-blur-xl bg-amber-500/[0.04] rounded-2xl p-4 border border-amber-400/20 shadow-[0_0_40px_rgba(251,191,36,0.06)] animate-fade-in-delayed shrink-0">
-                <h2 className="text-lg font-semibold mb-2 text-amber-200/90 tracking-wide">🏅 Hall of Fame {hallOfFame[0]?.year || ''}</h2>
+                <h2 className="text-2xl font-semibold mb-2 text-amber-200/90 tracking-wide">🏅 Hall of Fame {hallOfFame[0]?.year || ''}</h2>
                 <div className="grid grid-cols-3 gap-2">
                   {hallOfFame.map((entry, index) => (
                     <div key={entry.monthKey} className="backdrop-blur-xl bg-white/[0.03] rounded-xl p-2 border border-amber-300/15">
-                      <div className="text-[10px] text-amber-300/70 font-semibold mb-1">{entry.monthLabel}</div>
+                      <div className="text-sm text-amber-300/70 font-semibold mb-1">{entry.monthLabel}</div>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-white/80 flex items-center gap-1">
+                          <span className="text-base text-white/80 flex items-center gap-1">
                             <span className="text-amber-400">🥇</span> {entry.first.name}
                           </span>
-                          <span className="text-[10px] text-teal-300/90 font-semibold">
+                          <span className="text-sm text-teal-300/90 font-semibold">
                             {(entry.first.db / 1000).toFixed(0)}k
                           </span>
                         </div>
                         {entry.second.name !== '-' && (
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] text-white/60 flex items-center gap-1">
+                            <span className="text-base text-white/60 flex items-center gap-1">
                               <span className="text-slate-300">🥈</span> {entry.second.name}
                             </span>
-                            <span className="text-[10px] text-white/50 font-semibold">
+                            <span className="text-sm text-white/50 font-semibold">
                               {(entry.second.db / 1000).toFixed(0)}k
                             </span>
                           </div>
