@@ -83,9 +83,9 @@ export interface WebmercOrderData {
 
 export async function lookupOrder(orderId: string): Promise<WebmercOrderData | null> {
   const browserlessToken = process.env.BROWSERLESS_API_KEY;
-  const site = process.env.WEBMERC_COMPANY || 'Sprinter';
-  const username = process.env.WEBMERC_USERNAME;
-  const password = process.env.WEBMERC_PASSWORD;
+  const site = (process.env.WEBMERC_COMPANY || 'Sprinter').trim();
+  const username = (process.env.WEBMERC_USERNAME || '').trim();
+  const password = (process.env.WEBMERC_PASSWORD || '').trim();
   
   if (!browserlessToken || !username || !password) {
     throw new Error('Missing Webmerc/Browserless credentials');
@@ -194,9 +194,9 @@ export interface WebmercOrderListItem {
 
 export async function fetchRecentOrders(): Promise<WebmercOrderListItem[]> {
   const browserlessToken = process.env.BROWSERLESS_API_KEY;
-  const site = process.env.WEBMERC_COMPANY || 'Sprinter';
-  const username = process.env.WEBMERC_USERNAME;
-  const password = process.env.WEBMERC_PASSWORD;
+  const site = (process.env.WEBMERC_COMPANY || 'Sprinter').trim();
+  const username = (process.env.WEBMERC_USERNAME || '').trim();
+  const password = (process.env.WEBMERC_PASSWORD || '').trim();
   
   if (!browserlessToken || !username || !password) {
     throw new Error('Missing Webmerc/Browserless credentials');
@@ -338,9 +338,9 @@ export interface RetentionCheckResult {
 
 export async function checkCustomerRetention(customerName: string): Promise<RetentionCheckResult> {
   const browserlessToken = process.env.BROWSERLESS_API_KEY;
-  const site = process.env.WEBMERC_COMPANY || 'Sprinter';
-  const username = process.env.WEBMERC_USERNAME;
-  const password = process.env.WEBMERC_PASSWORD;
+  const site = (process.env.WEBMERC_COMPANY || 'Sprinter').trim();
+  const username = (process.env.WEBMERC_USERNAME || '').trim();
+  const password = (process.env.WEBMERC_PASSWORD || '').trim();
   
   if (!browserlessToken || !username || !password) {
     throw new Error('Missing Webmerc/Browserless credentials');
